@@ -53,6 +53,7 @@ The DX-50 will occasionally miss commands and queries, continue sending the stri
 """
 
 import serial
+import math
 
 class Timeout:
     pass
@@ -127,15 +128,58 @@ class XRay:
             assert out_echo == out
             return ret[len(out):]
 
+    def get_mode(self):
+        """
+        Return one of:
+        F: front panel
+        R: remote
+        """
+        ret = self.send("?M", recv=True)
+        assert ret in "FR"
+        return ret
+
+    def get_device(self):
+        """
+?D    Get device.
+    Reply MX-20
+
+        """
+        ret = self.send("?D", recv=True)
+        # FIXME: MX-20 support
+        assert ret == "DX-50"
+        return ret
+
+    def get_revision(self):
+        """
+?R    Get revision.
+    Reply 4.2
+        """
+        return float(self.send("?R", recv=True))
+
+    def get_state(self):
+        """
+?S    Get state.
+    Reply ?SW: Warming up
+    Reply ?SD: Door open
+    Reply ?SR: Ready
+
+        """
+
     def mode_remote(self):
         """
         !MR    Set mode remote
         """
+        self.send("!MR")
+        # No feedback, so query to verify set
+        assert self.get_mode() == "R"
 
     def mode_panel(self):
         """
-!MR    Set mode front panel
+!MF    Set mode front panel
         """
+        self.send("!MF")
+        # No feedback, so query to verify set
+        assert self.get_mode() == "F"
 
     def set_kvp(self, n):
         """
@@ -156,18 +200,33 @@ class XRay:
         assert 10 <= ret <= 35
         return ret
 
-    def set_exposure(self):
+    def set_expi(self, expi):
         """
 !T0140    Set 14.0 sec exposure
     Range 0.1-999.9 (T0001-T9999)
 
         """
+        self.send("?T%03u" % expi)
+        assert expi == self.get_expi()
 
-    def get_exposure(self):
+    def set_exp(self, exp):
+        self.set_expi(round(exp * 10.0))
+
+    def get_expi(self):
         """
-?T    Get exposure time.
-    Reply T0140
+        Return exposure time in 10th second
+
+        Note: low level returns in 10ths of second
+        Ex: reply T0140 => 14.0 sec
         """
+        ret = self.send("?T", recv=True)
+        ret = int(ret, 10)
+        # FIXME: range?
+        # assert 10 <= ret <= 35
+        return ret
+
+    def get_exp(self):
+        return self.get_expi() * 10.0
 
     def fire(self):
         """
@@ -178,38 +237,8 @@ class XRay:
     Machines replies "P" Processing
     Write "A" to abort
     Machine replies "S" when complete
-
         """
 
-    def get_state(self):
-        """
-?S    Get state.
-    Reply ?SW: Warming up
-    Reply ?SD: Door open
-    Reply ?SR: Ready
 
-        """
-
-    def get_mode(self):
-        """
-?M    Get mode.
-    Reply ?MF: Front panel mode
-    Reply ?MR: Remote mode
-
-        """
-
-    def get_device(self):
-        """
-?D    Get device.
-    Reply MX-20
-
-        """
-
-    def get_revision(self):
-        """
-?R    Get revision.
-    Reply 4.2
-
-        """
 
 

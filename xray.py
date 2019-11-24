@@ -10,12 +10,16 @@ def main():
     args = parser.parse_args()
 
     xr = xray.XRay(verbose=args.verbose)
+    print("Device %s, version %s" % (xr.get_device(), xr.get_revision()))
+    print("Front panel mode: %s " % xr.get_mode())
 
-    xr.set_kvp(10)
-    print("kVp: %u" % xr.get_kvp())
+    if 0:
+        xr.set_kvp(10)
+        print("kVp: %u" % xr.get_kvp())
+        
+        xr.set_kvp(35)
+        print("kVp: %u" % xr.get_kvp())
     
-    xr.set_kvp(35)
-    print("kVp: %u" % xr.get_kvp())
     
     print('Done')
 
