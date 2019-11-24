@@ -12,6 +12,7 @@ def main():
     xr = xray.XRay(verbose=args.verbose)
     print("Device %s, version %s" % (xr.get_device(), xr.get_revision()))
     print("Front panel mode: %s " % xr.get_mode())
+    print("State: %s" % xr.get_state())
 
     if 0:
         xr.set_kvp(10)

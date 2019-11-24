@@ -151,8 +151,11 @@ class XRay:
 
     def get_revision(self):
         """
-?R    Get revision.
-    Reply 4.2
+        Get firmware revision as float
+
+        mcmaster: 2.2
+        Seltzman: 4.2
+        Wonder what the differences are?
         """
         return float(self.send("?R", recv=True))
 
@@ -164,6 +167,9 @@ class XRay:
     Reply ?SR: Ready
 
         """
+        ret = self.send("?S", recv=True)
+        assert ret in "WDR"
+        return ret
 
     def mode_remote(self):
         """
