@@ -13,6 +13,11 @@ def main():
     print("Device %s, version %s" % (xr.get_device(), xr.get_revision()))
     print("Front panel mode: %s " % xr.get_mode())
     print("State: %s" % xr.get_state())
+    print("Exposure time %u ds" % xr.get_timed())
+    print("kVp %u" % xr.get_kvp())
+
+    if 0:
+        xr.set_timed(10)
 
     if 0:
         xr.set_kvp(10)

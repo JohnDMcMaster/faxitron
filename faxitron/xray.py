@@ -128,21 +128,12 @@ class XRay:
             assert out_echo == out
             return ret[len(out):]
 
-    def get_mode(self):
-        """
-        Return one of:
-        F: front panel
-        R: remote
-        """
-        ret = self.send("?M", recv=True)
-        assert ret in "FR"
-        return ret
-
     def get_device(self):
         """
-?D    Get device.
-    Reply MX-20
+        Get device model
 
+        mcmaster: MX-20
+        But other models like MX-20 should use the same API
         """
         ret = self.send("?D", recv=True)
         # FIXME: MX-20 support
@@ -161,19 +152,28 @@ class XRay:
 
     def get_state(self):
         """
-?S    Get state.
-    Reply ?SW: Warming up
-    Reply ?SD: Door open
-    Reply ?SR: Ready
-
+        Get overal device state
+        W: warming up
+        D: door open
+        R: ready (door closed)
         """
         ret = self.send("?S", recv=True)
         assert ret in "WDR"
         return ret
 
+    def get_mode(self):
+        """
+        Return one of:
+        F: front panel
+        R: remote
+        """
+        ret = self.send("?M", recv=True)
+        assert ret in "FR"
+        return ret
+
     def mode_remote(self):
         """
-        !MR    Set mode remote
+        Set mode to remote
         """
         self.send("!MR")
         # No feedback, so query to verify set
@@ -181,7 +181,7 @@ class XRay:
 
     def mode_panel(self):
         """
-!MF    Set mode front panel
+        Set mode to front panel
         """
         self.send("!MF")
         # No feedback, so query to verify set
@@ -189,7 +189,10 @@ class XRay:
 
     def set_kvp(self, n):
         """
-!V26    Set kV (10-35)
+        Set kV
+        n: 10 - 35
+
+        NOTE: beep
         """
         assert 10 <= n <= 35
         self.send("!V%u" % n)
@@ -206,33 +209,41 @@ class XRay:
         assert 10 <= ret <= 35
         return ret
 
-    def set_expi(self, expi):
+    def get_timed(self):
         """
-!T0140    Set 14.0 sec exposure
-    Range 0.1-999.9 (T0001-T9999)
-
-        """
-        self.send("?T%03u" % expi)
-        assert expi == self.get_expi()
-
-    def set_exp(self, exp):
-        self.set_expi(round(exp * 10.0))
-
-    def get_expi(self):
-        """
-        Return exposure time in 10th second
-
-        Note: low level returns in 10ths of second
-        Ex: reply T0140 => 14.0 sec
+        Return exposure time in deciseconds
         """
         ret = self.send("?T", recv=True)
         ret = int(ret, 10)
         # FIXME: range?
-        # assert 10 <= ret <= 35
+        assert 1 <= ret <=  9999
         return ret
 
-    def get_exp(self):
-        return self.get_expi() * 10.0
+    def get_time(self):
+        """
+        Return exposure time in seconds
+        """
+        return self.get_timed() * 10.0
+
+    def set_timed(self, dsec):
+        """
+        Set how long the tube will be on
+        dsec: deciseconds (ie 10 => 1.0 sec)
+
+        NOTE: beep
+        """
+        assert 1 <= dsec <=  9999
+        self.send("!T%04u" % dsec)
+        print(dsec, self.get_timed())
+        assert dsec == self.get_timed()
+
+    def set_time(self, sec):
+        """
+        Set how long the tube will be on in seconds
+        Rounded to nearest 10th second
+        NOTE: beep
+        """
+        self.set_timed(round(sec * 10.0))
 
     def fire(self):
         """
@@ -244,7 +255,3 @@ class XRay:
     Write "A" to abort
     Machine replies "S" when complete
         """
-
-
-
-
