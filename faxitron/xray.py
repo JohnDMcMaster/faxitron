@@ -47,6 +47,8 @@ The DX-50 will occasionally miss commands and queries, continue sending the stri
     Reply T0140
 
 
+!V26
+
 
 """
 
@@ -56,8 +58,8 @@ class Timeout:
     pass
 
 class XRay:
-    def __init__(self, port="/dev/ttyUSB0", ser_timeout=10.0):
-        self.verbose = 1
+    def __init__(self, port="/dev/ttyUSB0", ser_timeout=10.0, verbose=False):
+        self.verbose = verbose
         self.serial = serial.Serial(port,
             baudrate=9600,
             bytesize=serial.EIGHTBITS,
@@ -96,7 +98,6 @@ class XRay:
         # Read until ~
         ret = ''
         for _i in range(60):
-            print("waiting...")
             c = self.serial.read(1)
             if c is not None:
                 c = c.decode("ascii")
@@ -111,7 +112,7 @@ class XRay:
             print('XRAY DEBUG: recv: returning: "%s"' % (ret,))
         return ret
 
-    def send(self, out):
+    def send(self, out, recv=False):
         if self.verbose:
             print('XRAY DEBUG: sending: %s' % (out,))
             if self.serial.inWaiting():
@@ -119,22 +120,12 @@ class XRay:
         # \n seems to have no effect
         self.serial.write((out + '\r').encode('ascii'))
         self.serial.flush()
-        ret = self.recv_nl()
-        out_echo = ret[0:len(out)]
-        print(out_echo, out)
-        assert out_echo == out
-        return ret[len(out):]
-
-        """
-        # Always expect a reply
-        ret = self.recv()
-        
-        if self.verbose:
-            res = self.serial.read()
-            if len(res):
-                raise Exception('Orphaned: %s' % res)
-        return ret
-        """
+        if recv:
+            ret = self.recv_nl()
+            out_echo = ret[0:len(out)]
+            # print(out_echo, out)
+            assert out_echo == out
+            return ret[len(out):]
 
     def mode_remote(self):
         """
@@ -152,13 +143,15 @@ class XRay:
         """
         assert 10 <= n <= 35
         self.send("!V%u" % n)
+        # No feedback, so query to verify set
+        assert self.get_kvp() == n
 
     def get_kvp(self):
         """
         ?V    Get kV.
         Reply ?V26
     """
-        ret = self.send("?V")
+        ret = self.send("?V", recv=True)
         ret = int(ret, 10)
         assert 10 <= ret <= 35
         return ret
