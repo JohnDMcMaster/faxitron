@@ -5,6 +5,12 @@ import os
 import glob
 from PIL import Image
 import PIL
+import struct
+
+MAGIC = "DCAMIMG"
+
+class BadMagic(Exception):
+    pass
 
 # This sort of works, but gives an 8 bit image
 # Can I get it to work with mode I somehow instead?
@@ -50,6 +56,16 @@ def process_bin(fin, fout):
     *
     00000100  e1 32 0c 36 a9 35 27 36  91 35 71 35 ae 35 48 36  |.2.6.5'6.5q5.5H6|
     """
+    header = buff[0:256]
+    magic = header[0:len(MAGIC)]
+    if MAGIC != magic:
+        raise BadMagic()
+    def u32(off):
+        return struct.unpack("<I", header[off:off + 4])[0]
+    width = u32(0x30)
+    height = u32(0x34)
+    assert width == 1032 and height == 1032, (width, height)
+
     buff = buff[256:]
     print('Decoding image...')
     img = decode(buff)
@@ -64,11 +80,14 @@ if __name__ == "__main__":
 
     if os.path.isdir(args.fin):
         if args.fout is None:
-            raise Exception("dir requires fout")
-        if not os.path.exists(args.fout):
-            os.mkdir(args.fout)
+            dout = args.fin
+        else:
+            dout = args.fout
+
+        if not os.path.exists(dout):
+            os.mkdir(dout)
         for fn in glob.glob(os.path.join(args.fin, '*.img')):
-            fout = os.path.join(args.fout, os.path.basename(fn).replace('.img', '.png'))
+            fout = os.path.join(dout, os.path.basename(fn).replace('.img', '.png'))
             process_bin(fn, fout)
     else:
         fout = args.fout
