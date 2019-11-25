@@ -171,16 +171,23 @@ class XRay:
         Set mode to remote
         """
         self.send("!MR")
+        # time.sleep(2.0)
         # No feedback, so query to verify set
-        assert self.get_mode() == "R"
+        got = self.get_mode()
+        assert got == "R", got
 
+    '''
     def mode_panel(self):
         """
         Set mode to front panel
         """
+        assert 0, "FIXME: doesn't seem to work"
         self.send("!MF")
+        # time.sleep(2.0)
         # No feedback, so query to verify set
-        assert self.get_mode() == "F"
+        got = self.get_mode()
+        assert got == "F", got
+    '''
 
     def set_kvp(self, n):
         """
@@ -192,7 +199,8 @@ class XRay:
         assert 10 <= n <= 35
         self.send("!V%u" % n)
         # No feedback, so query to verify set
-        assert self.get_kvp() == n
+        got = self.get_kvp()
+        assert got == n, got
 
     def get_kvp(self):
         """
@@ -229,7 +237,6 @@ class XRay:
         """
         assert 1 <= dsec <=  9999
         self.send("!T%04u" % dsec)
-        print(dsec, self.get_timed())
         assert dsec == self.get_timed()
 
     def set_time(self, sec):
