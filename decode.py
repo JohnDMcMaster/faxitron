@@ -6,7 +6,9 @@ import glob
 from PIL import Image
 import PIL
 
-def decode(buff):
+# This sort of works, but gives an 8 bit image
+# Can I get it to work with mode I somehow instead?
+def decode_l8(buff):
     width, height = 1032, 1032
     buff = str(buff[0:2 * width * height])
     # http://pillow.readthedocs.io/en/3.1.x/handbook/writing-your-own-file-decoder.html
@@ -14,6 +16,24 @@ def decode(buff):
     img = Image.frombytes('L', (width, height), buff, "raw", "L;16", 0, -1)
     #img =  PIL.ImageOps.invert(img)
     return img
+
+def decode(buff):
+    '''Given bin return PIL image object'''
+    depth = 2
+    width, height = 1032, 1032
+    buff = bytearray(buff)
+
+    # no need to reallocate each loop
+    img = Image.new("I", (height, width), "White")
+
+    for y in range(height):
+        line0 = buff[y * width * depth:(y + 1) * width * depth]
+        for x in range(width):
+            b0 = line0[2*x + 0]
+            b1 = line0[2*x + 1]
+            img.putpixel((x, y), (b1 << 8) + b0)
+    return img
+#decode = decode_l8
 
 def process_bin(fin, fout):
     print('Reading %s...' % fin)
@@ -47,13 +67,13 @@ if __name__ == "__main__":
             raise Exception("dir requires fout")
         if not os.path.exists(args.fout):
             os.mkdir(args.fout)
-        for fn in glob.glob(os.path.join(args.fin, '*.bin')):
-            fout = os.path.join(args.fout, os.path.basename(fn).replace('.bin', '.png'))
+        for fn in glob.glob(os.path.join(args.fin, '*.img')):
+            fout = os.path.join(args.fout, os.path.basename(fn).replace('.img', '.png'))
             process_bin(fn, fout)
     else:
         fout = args.fout
         if fout is None:
-            fout = args.fin.replace('.bin', '.png')
+            fout = args.fin.replace('.img', '.png')
             if args.fin == fout:
                 raise Exception("Couldn't auto name output file")
         process_bin(args.fin, fout)

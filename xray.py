@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from faxitron import xray
 import argparse
 
