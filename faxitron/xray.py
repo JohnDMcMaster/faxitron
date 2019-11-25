@@ -226,7 +226,7 @@ class XRay:
         """
         Return exposure time in seconds
         """
-        return self.get_timed() * 10.0
+        return self.get_timed() / 10.0
 
     def set_timed(self, dsec):
         """
@@ -258,15 +258,17 @@ class XRay:
         TODO: add abort Lock based param?
         not needed for now
         """
+        fire_time = self.get_time()
+        kvp = self.get_kvp()
         if timeout is None:
-            timeout = self.get_time() + 1.0
+            timeout = fire_time + 1.0
         verbose = verbose or self.verbose
     
         # Sanity check the door to avoid timeout below if possible
         self.assert_ready()
 
         # If the door is open, no response is given
-        verbose and print("fire: starting")
+        verbose and print("fire: starting, %0.1f s @ %s kVp" % (fire_time, kvp))
         # Start x-ray sequence
         self.send("!B")
         # Wait for X to acknowledge firing (no newline)
