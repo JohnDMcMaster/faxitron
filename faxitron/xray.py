@@ -10,7 +10,13 @@ Wonder where those came from?
 import serial
 import time
 
-class Timeout:
+class Timeout(Exception):
+    pass
+
+class DoorOpen(Exception):
+    pass
+
+class WarmingUp(Exception):
     pass
 
 # TODO: look into MX-20
@@ -128,6 +134,17 @@ class XRay:
         """
         return float(self.send("?R", recv=True))
 
+    def assert_ready(self):
+        s = self.get_state()
+        if s == 'R':
+            return
+        elif s == 'D':
+            raise DoorOpen()
+        elif s == 'W':
+            raise WarmingUp()
+        else:
+            assert 0
+
     def get_state(self):
         """
         Get overal device state
@@ -223,37 +240,44 @@ class XRay:
         """
         self.set_timed(round(sec * 10.0))
 
-    def fire(self, timeout=None):
+    def fire(self, timeout=None, verbose=False):
         """
         NOTE: radiation emission
 
+        WARNING: correct x-ray is not guaranteed
+        I tried opening the door and it doesn't seem to do anything different
+        ie it cut the exposure time and returned S as if completed normally
+
         TODO: add abort Lock based param?
         not needed for now
-
-        "all commands <!xxxxx> must be followed by a <CR>, 'C' and 'A' do not require a <CR>"
-
-!B    Initiates X-ray
-    Then this sequence:
-    Machines replies "X" X-ray
-    Write "C" Continue to start actual X-ray
-    Machines replies "P" Processing
-    Write "A" to abort
-    Machine replies "S" when complete
         """
         if timeout is None:
             timeout = self.get_time() + 1.0
-        
+        verbose = verbose or self.verbose
+    
+        # Sanity check the door to avoid timeout below if possible
+        self.assert_ready()
+
+        # If the door is open, no response is given
+        verbose and print("fire: starting")
         # Start x-ray sequence
         self.send("!B")
         # Wait for X to acknowledge firing (no newline)
         c = self.recv_c()
         assert c == "X", "Got '%s'" % c
 
+        verbose and print("fire: confirming")
         # Confirm x-ray
         self.send("C")
         c = self.recv_c()
         assert c == "P"
 
+        verbose and print("fire: waiting")
         # Wait for x-ray to complete
         c = self.recv_c(timeout=timeout)
         assert c == "S"
+
+        # Sanity check the door in case it was opened to interrupt the x-ray
+        self.assert_ready()
+
+        verbose and print("fire: done")

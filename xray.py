@@ -28,7 +28,8 @@ def main():
     
 
     if 1:
-        xr.fire()
+        xr.set_time(10)
+        xr.fire(verbose=True)
     
     print('Done')
 
