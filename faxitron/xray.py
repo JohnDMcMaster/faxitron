@@ -5,61 +5,17 @@ Based on:
 https://drive.google.com/file/d/1B64hYU_ONAPGTqL9EOMzYeRxt9jN4Q0G/view
 Faxitron Documents/Faxitron Serial Commands MX-20 and DX-50.txt
 Wonder where those came from?
-
-Faxitron Serial Commands for MX-20 and DX-50
-all commands <!xxxxx> must be followed by a <CR>, 'C' and 'A' do not require a <CR>
-The DX-50 will occasionally miss commands and queries, continue sending the string until the unit responds
--------------------------
-
-!MR    Set mode remote
-!MR    Set mode front panel
-!V26    Set kV (10-35)
-!T0140    Set 14.0 sec exposure
-    Range 0.1-999.9 (T0001-T9999)
-
-!B    Initiates X-ray
-    Then this sequence:
-    Machines replies "X" X-ray
-    Write "C" Continue to start actual X-ray
-    Machines replies "P" Processing
-    Write "A" to abort
-    Machine replies "S" when complete
-
-?S    Get state.
-    Reply ?SW: Warming up
-    Reply ?SD: Door open
-    Reply ?SR: Ready
-
-?M    Get mode.
-    Reply ?MF: Front panel mode
-    Reply ?MR: Remote mode
-
-?D    Get device.
-    Reply MX-20
-
-?R    Get revision.
-    Reply 4.2
-
-?V    Get kV.
-    Reply ?V26
-
-?T    Get exposure time.
-    Reply T0140
-
-
-!V26
-
-
 """
 
 import serial
-import math
+import time
 
 class Timeout:
     pass
 
+# TODO: look into MX-20
 class XRay:
-    def __init__(self, port="/dev/ttyUSB0", ser_timeout=10.0, verbose=False):
+    def __init__(self, port="/dev/ttyUSB0", ser_timeout=0.1, verbose=False):
         self.verbose = verbose
         self.serial = serial.Serial(port,
             baudrate=9600,
@@ -84,7 +40,7 @@ class XRay:
         """
         timeout = self.serial.timeout
         try:
-            self.serial.timeout = 0.05
+            self.serial.timeout = 0.1
             while True:
                 c = self.serial.read()
                 if not c:
@@ -92,17 +48,20 @@ class XRay:
         finally:
             self.serial.timeout = timeout
 
-    def recv_nl(self):
+    def recv_nl(self, timeout=1.0):
         """
         Most but not all commands respond with a new line
         """
-        # Read until ~
         ret = ''
-        for _i in range(60):
+        tstart = time.time()
+        while True:
             c = self.serial.read(1)
-            if c is not None:
-                c = c.decode("ascii")
-                self.verbose and print("%s %02X" % (c, ord(c)))
+            if not c:
+                if timeout is not None and time.time() - tstart >= timeout:
+                    raise Timeout('Timed out')
+                continue
+            c = c.decode("ascii")
+            self.verbose and print("%s %02X" % (c, ord(c)))
             if c == '\r':
                 break
             ret += c
@@ -113,7 +72,26 @@ class XRay:
             print('XRAY DEBUG: recv: returning: "%s"' % (ret,))
         return ret
 
+    def recv_c(self, timeout=1.0):
+        tstart = time.time()
+        while True:
+            c = self.serial.read(1)
+            if not c:
+                if timeout is not None and time.time() - tstart >= timeout:
+                    raise Timeout('Timed out')
+                continue
+            else:
+                c = c.decode("ascii")
+                self.verbose and print('XRAY DEBUG: recv: returning: %s %02X' % (c, ord(c)))
+                return c
+        
+
     def send(self, out, recv=False):
+        """
+        TODO: "The DX-50 will occasionally miss commands and queries, continue sending the string until the unit responds"
+        Maybe add some retry logic
+        """
+
         if self.verbose:
             print('XRAY DEBUG: sending: %s' % (out,))
             if self.serial.inWaiting():
@@ -245,8 +223,15 @@ class XRay:
         """
         self.set_timed(round(sec * 10.0))
 
-    def fire(self):
+    def fire(self, timeout=None):
         """
+        NOTE: radiation emission
+
+        TODO: add abort Lock based param?
+        not needed for now
+
+        "all commands <!xxxxx> must be followed by a <CR>, 'C' and 'A' do not require a <CR>"
+
 !B    Initiates X-ray
     Then this sequence:
     Machines replies "X" X-ray
@@ -255,3 +240,20 @@ class XRay:
     Write "A" to abort
     Machine replies "S" when complete
         """
+        if timeout is None:
+            timeout = self.get_time() + 1.0
+        
+        # Start x-ray sequence
+        self.send("!B")
+        # Wait for X to acknowledge firing (no newline)
+        c = self.recv_c()
+        assert c == "X", "Got '%s'" % c
+
+        # Confirm x-ray
+        self.send("C")
+        c = self.recv_c()
+        assert c == "P"
+
+        # Wait for x-ray to complete
+        c = self.recv_c(timeout=timeout)
+        assert c == "S"

@@ -26,6 +26,9 @@ def main():
         xr.set_kvp(35)
         print("kVp: %u" % xr.get_kvp())
     
+
+    if 1:
+        xr.fire()
     
     print('Done')
 
