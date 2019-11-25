@@ -263,30 +263,35 @@ class XRay:
         if timeout is None:
             timeout = fire_time + 1.0
         verbose = verbose or self.verbose
-    
+
         # Sanity check the door to avoid timeout below if possible
         self.assert_ready()
 
-        # If the door is open, no response is given
-        verbose and print("fire: starting, %0.1f s @ %s kVp" % (fire_time, kvp))
-        # Start x-ray sequence
-        self.send("!B")
-        # Wait for X to acknowledge firing (no newline)
-        c = self.recv_c()
-        assert c == "X", "Got '%s'" % c
-
-        verbose and print("fire: confirming")
-        # Confirm x-ray
-        self.send("C")
-        c = self.recv_c()
-        assert c == "P"
-
-        verbose and print("fire: waiting")
-        # Wait for x-ray to complete
-        c = self.recv_c(timeout=timeout)
-        assert c == "S"
-
-        # Sanity check the door in case it was opened to interrupt the x-ray
-        self.assert_ready()
+        try:
+            # If the door is open, no response is given
+            verbose and print("fire: starting, %0.1f s @ %s kVp" % (fire_time, kvp))
+            # Start x-ray sequence
+            self.send("!B")
+            # Wait for X to acknowledge firing (no newline)
+            c = self.recv_c()
+            assert c == "X", "Got '%s'" % c
+    
+            verbose and print("fire: confirming")
+            # Confirm x-ray
+            self.send("C")
+            c = self.recv_c()
+            assert c == "P"
+    
+            verbose and print("fire: waiting")
+            # Wait for x-ray to complete
+            c = self.recv_c(timeout=timeout)
+            assert c == "S"
+    
+            # Sanity check the door in case it was opened to interrupt the x-ray
+            self.assert_ready()
+        # notably ^C can cause this
+        except:
+            verbose and print("fire: aborting")
+            self.send("A")
 
         verbose and print("fire: done")
