@@ -46,7 +46,8 @@ def process_bin(fin, fout):
     buff = open(fin, 'r').read()
     """
     fixed 256 byte header
-    TODO: decode, or at least check magic
+    Exposure doesn't seem to be in here
+    Probably binning somewhere, hpos, vpos
 
     00000000  44 43 41 4d 49 4d 47 00  01 00 00 00 10 00 00 00  |DCAMIMG.........|
     00000010  30 00 00 00 01 00 00 00  28 00 01 10 01 00 00 00  |0.......(.......|
@@ -62,9 +63,41 @@ def process_bin(fin, fout):
         raise BadMagic()
     def u32(off):
         return struct.unpack("<I", header[off:off + 4])[0]
+
+    # 0x08 1...maybe format version?
+    file_ver = u32(0x08)
+    assert file_ver == 1, file_ver
+
+    bit_ch = u32(0x0C)
+    assert bit_ch == 16, bit_ch
+
+    # 0x10 is 48, almost like RGB 16
+    # but its not...so w/e
+    # oddly enough, images do capture in 3s
+    # but they are per file, not sure what to make of that
+
+    # 0x14 is 1 / not sure
+
+    # 0x18: 268501032 ? no idea
+
+    # a few more boring fields
+
+    img_size = u32(0x28)
+    assert img_size == 1032 * 1032 * 2, img_size
+
+    # 0x2C 0 / not sure
+
     width = u32(0x30)
     height = u32(0x34)
     assert width == 1032 and height == 1032, (width, height)
+
+    # 0x38 0 / not sure
+
+    bytes_row = u32(0x3C)
+    assert bytes_row == 1032 * 2, bytes_row
+
+    # rest 0 / not sure
+
 
     buff = buff[256:]
     print('Decoding image...')
