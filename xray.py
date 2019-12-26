@@ -16,9 +16,10 @@ def main():
     parser.add_argument('--remote', default=None, action='store_true')
     #parser.add_argument('--panel', default=None, action='store_true')
     parser.add_argument('--fire', action="store_true")
+    parser.add_argument('--device', default="/dev/ttyUSB0")
     args = parser.parse_args()
 
-    xr = xray.XRay(verbose=args.verbose)
+    xr = xray.XRay(port=args.device, verbose=args.verbose)
     
     if args.info:
         print("Device %s, version %s" % (xr.get_device(), xr.get_revision()))
