@@ -17,7 +17,7 @@ def main():
     add_bool_arg(parser, '--png', default=True, help='Write normal .png image file')
     parser.add_argument('--dir', default=None, help='Output dir')
     parser.add_argument('-n', default=1, type=int, help='Number images')
-    parser.add_argument('--exp', default=250, type=int, help='Exposure ms')
+    parser.add_argument('--exp', default=2000, type=int, help='Exposure ms')
     parser.add_argument('--postfix', default=None, help='')
     args = parser.parse_args()
 
