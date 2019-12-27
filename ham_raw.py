@@ -38,7 +38,8 @@ def main():
     add_bool_arg(parser, '--bin', default=False, help='Write .bin raw data capture')
     add_bool_arg(parser, '--png', default=True, help='Write normal .png image file')
     parser.add_argument('--dir', default=None, help='Output dir')
-    parser.add_argument('-n', default=1, help='Number images')
+    parser.add_argument('-n', default=1, type=int, help='Number images')
+    parser.add_argument('--exp', default=250, type=int, help='Exposure ms')
     args = parser.parse_args()
 
     outdir = args.dir
@@ -58,6 +59,7 @@ def main():
             ham.decode(buff).save(pngfn)
 
     h = ham.Hamamatsu()
+    h.set_exp(args.exp)
 
     print('')
     print('')
@@ -68,5 +70,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
