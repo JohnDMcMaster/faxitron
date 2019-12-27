@@ -24,7 +24,6 @@ def main():
     outdir = args.dir
     if outdir is None:
         outdir = default_date_dir("out", "", args.postfix)
-    mkdir_p(outdir)
 
     def cap_cb(n, buff):
         binfn = '%s/cap_%02u.bin' % (outdir, n)
@@ -38,6 +37,7 @@ def main():
             ham.decode(buff).save(pngfn)
 
     h = ham.Hamamatsu()
+    mkdir_p(outdir)
     h.set_exp(args.exp)
 
     print('')
