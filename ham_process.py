@@ -24,6 +24,12 @@ import time
 import usb1
 from scipy.ndimage import median_filter
 import statistics
+import subprocess
+
+try:
+    from skimage import exposure
+except ImportError:
+    exposure = None
 
 def make_bpm(im):
     ret = set()
@@ -114,16 +120,39 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
 
 
     if hist_eq:
-        if hist_eq_roi:
-            x1, y1, x2, y2 = hist_eq_roi
-            ref_im = im_wip.crop((x1, y1, x2, y2))
+        mode = os.getenv("FAXITRON_EQ_MODE", "0")
+        if mode == "0":
+            if hist_eq_roi:
+                x1, y1, x2, y2 = hist_eq_roi
+                ref_im = im_wip.crop((x1, y1, x2, y2))
+            else:
+                ref_im = im_wip
+    
+            ref_np2 = np.array(ref_im)
+            wip_np2 = np.array(im_wip)
+            wip_np2 = util.histeq_np_apply(wip_np2, util.histeq_np_create(ref_np2))
+            im_wip = util.npf2im(wip_np2)
+        elif mode == "convert":
+            fna = "/tmp/ham_hist_a.png"
+            fnb = "/tmp/ham_hist_b.png"
+            im_wip.save(fna)
+            subprocess.check_call("convert %s \( +clone -equalize \) -average %s" % (fna, fnb), shell=True)
+            im_wip = Image.open(fnb)
+        elif mode == "1":
+            # OSError: not supported for this image mode
+            im_wip = ImageOps.equalize(im_wip, mask=None)
+        elif mode == "2":
+            imnp = np.array(im_wip, dtype=np.uint16)
+            im_wip = util.npf2im(exposure.equalize_hist(imnp))
+        elif mode == "3":
+            # raise ValueError("Images of type float must be between -1 and 1.")
+            imnp = np.array(im_wip, dtype=np.uint16)
+            #imnp = np.ndarray.astype(imnp, dtype=np.float)
+            print(np.ndarray.min(imnp), np.ndarray.max(imnp))
+            imnp = 1.0 * imnp / 0xFFFF
+            im_wip = util.npf2im(exposure.equalize_adapthist(imnp, clip_limit=0.03))
         else:
-            ref_im = im_wip
-
-        ref_np2 = np.array(ref_im)
-        wip_np2 = np.array(im_wip)
-        wip_np2 = util.histeq_np_apply(wip_np2, util.histeq_np_create(ref_np2))
-        im_wip = util.npf2im(wip_np2)
+            raise Exception(mode)
         im_wip.save(fn_oute)
 
 def main():

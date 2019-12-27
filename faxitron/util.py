@@ -182,9 +182,7 @@ def npf2im(statef):
             # this causes really weird issues if not done
             val = int(val)
             im.putpixel((x, y), val)
-            if 0 and y == 0 and x < 16:
-                print(x, y, val, im.getpixel((x, y)))
-                im.putpixel((x, y), val)
+
     return im
 
 def average_imgs(imgs, scalar=None):
