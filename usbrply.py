@@ -170,6 +170,8 @@ def dump(fin, save=False):
             comment = True
         elif p['type'] == 'bulkWrite':
             bulk_write(p)
+        elif p['type'] == 'bulkRead':
+            print("# WARNING: dropping bulkRead")
         else:
             raise Exception("%u unknown type: %s" % (pi, p['type']))
         if not comment:

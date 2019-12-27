@@ -35,7 +35,7 @@ def bulk1(dev, cmd):
     bulkWrite(0x01, cmd)
     return bulkRead(0x83, 0x0200)
 
-def init(dev, exp=500):
+def init(dev, exp_ms=500):
     def bulkRead(endpoint, length, timeout=None):
         ret = dev.bulkRead(endpoint, length, timeout=(1000 if timeout is None else timeout))
         print('')
@@ -146,8 +146,8 @@ def init(dev, exp=500):
     validate_read("\x00\x00\x00\x00\x00\x00\x00\x00", bulk1(dev, "\x00\x00\x00\x21\x00\x00\x00\x04\x00\x00\x00\x03"), "packet 309/310")
 
 
-    set_exp(dev, exp)
-    assert get_exp(dev) == exp
+    set_exp(dev, exp_ms)
+    assert get_exp(dev) == exp_ms
 
 
     validate_read("\x00", bulk1(dev, "\x00\x00\x00\x2D\x00\x00\x00\x02\x00\x01"), "packet 337/338")
@@ -156,7 +156,7 @@ def init(dev, exp=500):
     validate_read("\x00", bulk1(dev, "\x00\x00\x00\x2E\x00\x00\x00\x04\x00\x00\x00\x12"), "packet 345/346")
     validate_read("\x00", bulk1(dev, "\x00\x00\x00\x2E\x00\x00\x00\x04\x00\x00\x00\x02"), "packet 349/350")
 
-    set_exp(dev, exp)
+    set_exp(dev, exp_ms)
 
 
     validate_read("\x00", bulk1(dev, "\x00\x00\x00\x2D\x00\x00\x00\x02\x00\x01"), "packet 361/362")
@@ -182,24 +182,9 @@ def init(dev, exp=500):
 
     validate_read("\x01", bulk1(dev, "\x00\x00\x00\x0E\x00\x00\x00\x01\x01"), "packet 1398/1399")
 
-def cap_img(dev):
+def cap_img(dev, timeout_ms=2500):
     def bulkRead(endpoint, length, timeout=None):
-        ret = dev.bulkRead(endpoint, length, timeout=(1000 if timeout is None else timeout))
-        #hexdump(ret[0:16], label='bulkRead(%u)' % length, indent='')
-        return ret
-
-    def bulkWrite(endpoint, data, timeout=None):
-        dev.bulkWrite(endpoint, data, timeout=(1000 if timeout is None else timeout))
-    
-    def controlRead(request_type, request, value, index, length,
-                    timeout=None):
-        return dev.controlRead(request_type, request, value, index, length,
-                    timeout=(1000 if timeout is None else timeout))
-
-    def controlWrite(request_type, request, value, index, data,
-                     timeout=None):
-        dev.controlWrite(request_type, request, value, index, data,
-                     timeout=(1000 if timeout is None else timeout))
+        return dev.bulkRead(endpoint, length, timeout=timeout_ms)
 
     '''
     Ret buff 1: 2
@@ -275,9 +260,32 @@ def unpack32(buff):
 def get_exp(dev):
     return unpack32(bulk1(dev, "\x00\x00\x00\x1F\x00\x00\x00\x00"))
 
-def set_exp(dev, ms):
-    validate_read("\x01", bulk1(dev, "\x00\x00\x00\x20\x00\x00\x00\x04" + pack32(ms)), "exposure set")
-    assert get_exp(dev) == ms
+def set_exp(dev, exp_ms):
+    # Determined experimentally
+    # less than 30 verify fails
+    # setting above 2000 seems to silently fail and peg at 2000
+    # 3000 is slightly brighter than 2000 though, so the actual limit might be 2048 or something of that sort
+    assert 30 <= exp_ms <= 2000
+
+    validate_read("\x01", bulk1(dev, "\x00\x00\x00\x20\x00\x00\x00\x04" + pack32(exp_ms)), "exposure set")
+    assert get_exp(dev) == exp_ms
+   
+    validate_read("\x01", bulk1(dev,
+            "\x00\x00\x00\x09\x00\x00\x00\x0A\x00\x01\x00\x00\x00\x00\x04\x08" \
+            "\x04\x08"
+            ), "packet 925/926")
+    validate_read("\x00\x00\x04\x08\x00\x00\x04\x08", bulk1(dev, "\x00\x00\x00\x04\x00\x00\x00\x00"), "packet 929/930")
+    validate_read("\x01", bulk1(dev,
+            "\x00\x00\x00\x09\x00\x00\x00\x0A\x00\x01\x00\x00\x00\x00\x04\x08" \
+            "\x04\x08"
+            ), "packet 933/934")
+    validate_read("\x00\x00\x04\x08\x00\x00\x04\x08", bulk1(dev, "\x00\x00\x00\x04\x00\x00\x00\x00"), "packet 937/938")
+    validate_read("\x00\x00\x04\x08\x00\x00\x04\x08", bulk1(dev, "\x00\x00\x00\x04\x00\x00\x00\x00"), "packet 941/942")
+
+    # adding this seems to actually confirm the exposure
+    # tried removing and old is in place without it
+    validate_read("\x01", bulk1(dev, "\x00\x00\x00\x0E\x00\x00\x00\x01\x01"), "packet 945/946")
+
 
 def open_dev(usbcontext=None):
     if usbcontext is None:
@@ -300,19 +308,20 @@ def open_dev(usbcontext=None):
     raise Exception("Failed to find a device")
 
 class Hamamatsu:
-    def __init__(self):
+    def __init__(self, exp_ms=250):
         usbcontext = usb1.USBContext()
         self.dev = open_dev(usbcontext)
         self.dev.claimInterface(0)
         self.dev.resetDevice()
-        init(self.dev)
+        self.exp_ms = exp_ms
+        init(self.dev, exp_ms=self.exp_ms)
 
     def cap(self, cb, n=1):
         buffs=[]
         print("Collecting")
         for i in range(n):
             print("img %u" % i)
-            pack2, buff = cap_img(self.dev)
+            pack2, buff = cap_img(self.dev, timeout_ms=(self.exp_ms + 500))
             assert len(buff) == imgsz + 2, len(buff)
             postfix = buff[imgsz:]
             buff = buff[0:imgsz]
@@ -324,5 +333,6 @@ class Hamamatsu:
         print("exp: %u" % get_exp(self.dev))
 
     def set_exp(self, ms):
+        self.exp_ms = ms
         set_exp(self.dev, ms)
 
