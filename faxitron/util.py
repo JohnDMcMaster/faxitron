@@ -1,6 +1,7 @@
 import datetime
 import os
 import sys
+import glob
 
 def add_bool_arg(parser, yes_arg, default=False, **kwargs):
     dashed = yes_arg.replace('--', '')
@@ -13,7 +14,7 @@ def hexdump(data, label=None, indent='', address_width=8, f=sys.stdout):
         return c >= ' ' and c <= '~'
 
     if label:
-        print label
+        print(label)
     
     bytes_per_half_row = 8
     bytes_per_row = 16
@@ -57,7 +58,7 @@ def default_date_dir(root, prefix, postfix):
 
     n = 1
     while True:
-        fn = '%s/%s%s_%02u' % (prefix, datestr, n)
+        fn = '%s/%s%s_%02u' % (root, prefix, datestr, n)
         if len(glob.glob(fn + '*')) == 0:
             if postfix:
                 return fn + '_' + postfix
