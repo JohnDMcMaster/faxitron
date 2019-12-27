@@ -19,6 +19,9 @@ class DoorOpen(Exception):
 class WarmingUp(Exception):
     pass
 
+def default_port():
+    return "/dev/ttyUSB0"
+
 # TODO: look into MX-20
 class XRay:
     def __init__(self, port="/dev/ttyUSB0", ser_timeout=0.1, verbose=False):

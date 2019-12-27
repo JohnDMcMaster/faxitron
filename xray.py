@@ -16,7 +16,7 @@ def main():
     parser.add_argument('--remote', default=None, action='store_true')
     #parser.add_argument('--panel', default=None, action='store_true')
     parser.add_argument('--fire', action="store_true")
-    parser.add_argument('--port', default="/dev/ttyUSB0")
+    parser.add_argument('--port', default=xray.default_port())
     args = parser.parse_args()
 
     xr = xray.XRay(port=args.port, verbose=args.verbose)

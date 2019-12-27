@@ -4,7 +4,7 @@ import binascii
 import datetime
 import time
 import usb1
-from faxitron.util import hexdump, add_bool_arg, tobytes
+from faxitron.util import hexdump, add_bool_arg, tobytes, tostr
 from PIL import Image
 import os
 import struct
@@ -34,50 +34,34 @@ def bulk1(dev, cmd):
     bulkWrite(0x01, cmd)
     return bulkRead(0x83, 0x0200)
 
+'''
+Sample info block:
+
+00000000  48 41 4d 41 4d 41 54 53  55 00 00 00 00 00 00 00  |HAMAMATSU.......|
+00000010  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00000020  43 39 37 33 30 44 4b 2d  31 31 00 00 00 00 00 00  |C9730DK-11......|
+00000030  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00000040  31 2e 32 31 00 00 00 00  00 00 00 00 00 00 00 00  |1.21............|
+00000050  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00000060  35 34 30 33 32 31 39 00  00 00 00 00 00 00 00 00  |5403219.........|
+00000070  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+'''
+
+def parse_info(buff):
+    assert len(buff) == 0x80
+    vendor = buff[0x00:0x20].replace('\x00', '')
+    model = buff[0x20:0x40].replace('\x00', '')
+    ver = buff[0x40:0x60].replace('\x00', '')
+    sn = buff[0x60:0x80].replace('\x00', '')
+    return vendor, model, ver, sn
+
 def get_info(dev):
-    '''
-    00000000  48 41 4D 41 4D 41 54 53  55 00 00 00 00 00 00 00  |HAMAMATSU.......|
-    00000010  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
-    00000020  43 39 37 33 30 44 4B 2D  31 31 00 00 00 00 00 00  |C9730DK-11......|
-    00000030  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
-    00000040  31 2E 32 31 00 00 00 00  00 00 00 00 00 00 00 00  |1.21............|
-    00000050  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
-    00000060  35 34 30 33 32 31 39 00  00 00 00 00 00 00 00 00  |5403219.........|
-    00000070  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
-    '''
     validate_read(b"\x01", bulk1(dev, b"\x00\x00\x00\x00\x00\x00\x00\x00"), "packet 209/210")
-    ret = bulk1(dev, b"\x00\x00\x00\x01\x00\x00\x00\x00")
+    ret = tostr(bulk1(dev, b"\x00\x00\x00\x01\x00\x00\x00\x00"))
     assert len(ret) == 0x80
     return ret
 
 def init(dev, exp_ms=500):
-    def bulkRead(endpoint, length, timeout=None):
-        ret = dev.bulkRead(endpoint, length, timeout=(1000 if timeout is None else timeout))
-        print('')
-        hexdump(ret, label='bulkRead(%u)' % length, indent='')
-        return ret
-
-    def bulkWrite(endpoint, data, timeout=None):
-        dev.bulkWrite(endpoint, data, timeout=(1000 if timeout is None else timeout))
-    
-    def controlRead(request_type, request, value, index, length,
-                    timeout=None):
-        return dev.controlRead(request_type, request, value, index, length,
-                    timeout=(1000 if timeout is None else timeout))
-
-    def controlWrite(request_type, request, value, index, data,
-                     timeout=None):
-        dev.controlWrite(request_type, request, value, index, data,
-                     timeout=(1000 if timeout is None else timeout))
-
-
-    '''
-    # Generated from packet 209/210
-    bulkWrite(0x01, "\x00\x00\x00\x00\x00\x00\x00\x00")
-    # Generated from packet 211/212
-    buff = bulkRead(0x83, 0x0200)
-    validate_read(b"\x01", buff, "packet 211/212")
-    '''
     validate_read(b"\x01", bulk1(dev, b"\x00\x00\x00\x00\x00\x00\x00\x00"), "packet 211/212")
 
     get_info(dev)
@@ -251,23 +235,24 @@ def set_exp(dev, exp_ms):
     validate_read(b"\x01", bulk1(dev, b"\x00\x00\x00\x0E\x00\x00\x00\x01\x01"), "packet 945/946")
 
 
-def open_dev(usbcontext=None):
+def open_dev(usbcontext=None, verbose=False):
     if usbcontext is None:
         usbcontext = usb1.USBContext()
     
-    print('Scanning for devices...')
+    verbose and print('Scanning for devices...')
     for udev in usbcontext.getDeviceList(skip_on_error=True):
         vid = udev.getVendorID()
         pid = udev.getProductID()
         if (vid, pid) == (0x0661, 0xA802):
-            print('')
-            print('')
-            print('Found device')
-            print('Bus %03i Device %03i: ID %04x:%04x' % (
-                udev.getBusNumber(),
-                udev.getDeviceAddress(),
-                vid,
-                pid))
+            if verbose:
+                print('')
+                print('')
+                print('Found device')
+                print('Bus %03i Device %03i: ID %04x:%04x' % (
+                    udev.getBusNumber(),
+                    udev.getDeviceAddress(),
+                    vid,
+                    pid))
             return udev.open()
     raise Exception("Failed to find a device")
 
@@ -300,3 +285,14 @@ class Hamamatsu:
         self.exp_ms = ms
         set_exp(self.dev, ms)
 
+    def get_vendor(self):
+        return parse_info(get_info(self.dev))[0]
+    
+    def get_model(self):
+        return parse_info(get_info(self.dev))[1]
+    
+    def get_ver(self):
+        return parse_info(get_info(self.dev))[2]
+    
+    def get_sn(self):
+        return parse_info(get_info(self.dev))[3]

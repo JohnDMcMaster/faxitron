@@ -4,6 +4,7 @@ import sys
 import glob
 import numpy as np
 from PIL import Image
+import shutil
 
 def add_bool_arg(parser, yes_arg, default=False, **kwargs):
     dashed = yes_arg.replace('--', '')
@@ -232,3 +233,56 @@ def parse_roi(s):
     if s is None:
         return None
     return [int(x) for x in s.split(',')]
+
+# Log file descriptor to file
+class IOLog(object):
+    def __init__(self,
+                 obj=sys,
+                 name='stdout',
+                 out_fn=None,
+                 out_fd=None,
+                 mode='a',
+                 shift=False,
+                 multi=False):
+        if not multi:
+            if out_fd:
+                self.out_fd = out_fd
+            else:
+                self.out_fd = open(out_fn, 'w')
+        else:
+            # instead of jamming logs together, shift last to log.txt.1, etc
+            if shift and os.path.exists(out_fn):
+                i = 0
+                while True:
+                    dst = out_fn + '.' + str(i)
+                    if os.path.exists(dst):
+                        i += 1
+                        continue
+                    shutil.move(out_fn, dst)
+                    break
+
+            hdr = mode == 'a' and os.path.exists(out_fn)
+            self.out_fd = open(out_fn, mode)
+            if hdr:
+                self.out_fd.write('*' * 80 + '\n')
+                self.out_fd.write('*' * 80 + '\n')
+                self.out_fd.write('*' * 80 + '\n')
+                self.out_fd.write('Log rolled over\n')
+
+        self.obj = obj
+        self.name = name
+
+        self.fd = obj.__dict__[name]
+        obj.__dict__[name] = self
+        self.nl = True
+
+    def __del__(self):
+        if self.obj:
+            self.obj.__dict__[self.name] = self.fd
+
+    def flush(self):
+        self.fd.flush()
+
+    def write(self, data):
+        self.fd.write(data)
+        self.out_fd.write(data)
