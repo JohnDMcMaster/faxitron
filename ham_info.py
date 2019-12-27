@@ -2,6 +2,7 @@
 
 from faxitron.util import add_bool_arg, default_date_dir, mkdir_p
 from faxitron import ham
+from faxitron import util
 
 def main():
     import argparse 
@@ -18,6 +19,7 @@ def main():
     h = ham.Hamamatsu()
     mkdir_p(outdir)
     info = ham.get_info(h.dev)
+    util.hexdump(info)
     open("%s/info.bin" % outdir, "wb").write(info)
 
 if __name__ == "__main__":

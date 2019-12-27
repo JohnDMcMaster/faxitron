@@ -4,21 +4,12 @@ import binascii
 import datetime
 import time
 import usb1
-from faxitron.util import hexdump, add_bool_arg
+from faxitron.util import hexdump, add_bool_arg, tobytes
 from PIL import Image
 import os
 import struct
 
 imgsz = 1032 * 1032 * 2
-
-def tobytes(buff):
-    if type(buff) is str:
-        #return bytearray(buff, 'ascii')
-        return bytearray([ord(c) for c in buff])
-    elif type(buff) is bytearray or type(buff) is bytes:
-        return buff
-    else:
-        assert 0, type(buff)
 
 def validate_read(expected, actual, msg):
     expected = tobytes(expected)

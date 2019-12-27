@@ -20,7 +20,8 @@ def hexdump(data, label=None, indent='', address_width=8, f=sys.stdout):
     
     bytes_per_half_row = 8
     bytes_per_row = 16
-    data = bytearray(data)
+    datab = tobytes(data)
+    datas = tostr(data)
     data_len = len(data)
     
     def hexdump_half_row(start):
@@ -28,7 +29,7 @@ def hexdump(data, label=None, indent='', address_width=8, f=sys.stdout):
         
         real_data = min(bytes_per_half_row, left)
 
-        f.write(''.join('%02X ' % c for c in data[start:start+real_data]))
+        f.write(''.join('%02X ' % c for c in datab[start:start+real_data]))
         f.write(''.join('   '*(bytes_per_half_row-real_data)))
         f.write(' ')
 
@@ -47,7 +48,7 @@ def hexdump(data, label=None, indent='', address_width=8, f=sys.stdout):
         left = data_len - row_start
         real_data = min(bytes_per_row, left)
 
-        f.write(''.join([c if isprint(c) else '.' for c in str(data[row_start:row_start+real_data])]))
+        f.write(''.join([c if isprint(c) else '.' for c in str(datas[row_start:row_start+real_data])]))
         f.write((" " * (bytes_per_row - real_data)) + "|\n")
 
 def default_date_dir(root, prefix, postfix):
@@ -209,3 +210,20 @@ def average_dir(din, images=0, verbose=1):
             break
     return average_imgs(imgs)
 
+
+def tobytes(buff):
+    if type(buff) is str:
+        #return bytearray(buff, 'ascii')
+        return bytearray([ord(c) for c in buff])
+    elif type(buff) is bytearray or type(buff) is bytes:
+        return buff
+    else:
+        assert 0, type(buff)
+
+def tostr(buff):
+    if type(buff) is str:
+        return buff
+    elif type(buff) is bytearray or type(buff) is bytes:
+        return ''.join([chr(b) for b in buff])
+    else:
+        assert 0, type(buff)
