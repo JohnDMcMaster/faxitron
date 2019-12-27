@@ -22,6 +22,38 @@ import os
 import sys
 import time
 import usb1
+from scipy.ndimage import median_filter
+import statistics
+
+def make_bpm(im):
+    ret = set()
+    for y in range(height):
+        for x in range(width):
+            if im.getpixel((x, y)):
+                ret.add((x, y))
+    return ret
+
+
+def im_med3(im, x, y):
+    pixs = []
+    for dx in range(-1, 2, 1):
+        xp = x + dx
+        if xp < 0 or xp >= width:
+            continue
+        for dy in range(-1, 2, 1):
+            yp = y + dy
+            if yp < 0 or yp >= height:
+                continue
+            pixs.append(im.getpixel((xp, yp)))
+    return statistics.median(pixs)
+
+
+def do_bpr(im, badimg):
+    ret = im.copy()
+    bad_pixels = make_bpm(badimg)
+    for x, y in bad_pixels:
+        ret.putpixel((x, y), im_med3(im, x, y))
+    return ret
 
 def main():
     import argparse 
@@ -45,59 +77,48 @@ def main():
 
     _imgn, img_in = util.average_dir(args.dir_in)
 
+    rescale = False
+    bpr = True
 
     badimg = Image.open(os.path.join(args.cal_dir, 'bad.png'))
-    ffimg = Image.open(os.path.join(args.cal_dir, 'ff.png'))
-    np_ff2 = np.array(ffimg)
-    dfimg = Image.open(os.path.join(args.cal_dir, 'df.png'))
-    np_df2 = np.array(dfimg)
+    
+    if rescale:
+        ffimg = Image.open(os.path.join(args.cal_dir, 'ff.png'))
+        np_ff2 = np.array(ffimg)
+        dfimg = Image.open(os.path.join(args.cal_dir, 'df.png'))
+        np_df2 = np.array(dfimg)
 
-
-
-    # ff *should* be brighter than df
-    # (due to .png pixel value inversion convention)
-    mins = np.minimum(np_df2, np_ff2)
-    maxs = np.maximum(np_df2, np_ff2)
-
-    u16_mins = np.full(mins.shape, 0x0000, dtype=np.dtype('float'))
-    u16_ones = np.full(mins.shape, 0x0001, dtype=np.dtype('float'))
-    u16_maxs = np.full(mins.shape, 0xFFFF, dtype=np.dtype('float'))
-
-    cal_det = maxs - mins
-    # Prevent div 0 on bad pixels
-    cal_det = np.maximum(cal_det, u16_ones)
-    cal_scalar = 0xFFFF / cal_det
+        # ff *should* be brighter than df
+        # (due to .png pixel value inversion convention)
+        mins = np.minimum(np_df2, np_ff2)
+        maxs = np.maximum(np_df2, np_ff2)
+    
+        u16_mins = np.full(mins.shape, 0x0000, dtype=np.dtype('float'))
+        u16_ones = np.full(mins.shape, 0x0001, dtype=np.dtype('float'))
+        u16_maxs = np.full(mins.shape, 0xFFFF, dtype=np.dtype('float'))
+    
+        cal_det = maxs - mins
+        # Prevent div 0 on bad pixels
+        cal_det = np.maximum(cal_det, u16_ones)
+        cal_scalar = 0xFFFF / cal_det
 
     def process(desc, im_in, fn_out):
         print('Processing %s' % desc)
-        np_in2 = np.array(im_in)
-        np_scaled = (np_in2 - mins) * cal_scalar
-        # If it clipped, squish to good values
-        np_scaled = np.minimum(np_scaled, u16_maxs)
-        np_scaled = np.maximum(np_scaled, u16_mins)
-        imc = Image.fromarray(np_scaled).convert("I")
-        imc.save(fn_out)
+        
+        im_wip = im_in
+        if rescale:
+            np_in2 = np.array(im_wip)
+            np_scaled = (np_in2 - mins) * cal_scalar
+            # If it clipped, squish to good values
+            np_scaled = np.minimum(np_scaled, u16_maxs)
+            np_scaled = np.maximum(np_scaled, u16_mins)
+            im_wip = Image.fromarray(np_scaled).convert("I")
+        
+        if bpr:
+            im_wip = do_bpr(im_wip, badimg)
+
+        im_wip.save(fn_out)
     process(args.dir_in, img_in, fn_out)
-
-    '''
-    if os.path.isdir(args.din):
-        if not os.path.exists(args.dout):
-            os.mkdir(args.dout)
-
-        for fn_in in glob.glob(args.din + '/*.png'):
-            fn_out = os.path.join(args.dout, os.path.basename(fn_in))
-            process(fn_in, fn_out)
-    elif os.path.isfile(args.din):
-        fn_in = args.din
-        fn_out = args.dout
-        if not fn_out:
-            fn_out = fn_in.replace('.png', '_cal.png')
-            assert fn_in != fn_out
-        process(fn_in, fn_out)
-    else:
-        raise Exception("Bad input file/dir")
-    '''
-
 
 
     print("done")

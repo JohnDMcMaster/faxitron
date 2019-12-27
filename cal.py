@@ -25,26 +25,26 @@ import usb1
 
 
 """
-def bad_pixs_bf1(bff, bfi):
-    bfmed = np.median(bff)
-    print("min: %0.1f, med: %0.1f, max: %0.1f" % (np.amin(bff), bfmed, np.amax(bff)))
-    #cold_pixs = bff[bff <= bfmed/2.0]
-    cold_pixs = np.nonzero(bff <= bfmed/2.0)
+def bad_pixs_ff1(fff, ffi):
+    ffmed = np.median(fff)
+    print("min: %0.1f, med: %0.1f, max: %0.1f" % (np.amin(fff), ffmed, np.amax(fff)))
+    #cold_pixs = fff[fff <= ffmed/2.0]
+    cold_pixs = np.nonzero(fff <= ffmed/2.0)
     print(cold_pixs)
     print("Cold pixels: %u / %u" % (len(cold_pixs), width * height))
     #x = i % width
     #y = i // width
 """
 
-def bad_pixs_bf(bff, bfi):
-    bfmed = np.median(bff)
-    print("min: %0.1f, med: %0.1f, max: %0.1f" % (np.amin(bff), bfmed, np.amax(bff)))
+def bad_pixs_ff(fff, ffi):
+    ffmed = np.median(fff)
+    print("min: %0.1f, med: %0.1f, max: %0.1f" % (np.amin(fff), ffmed, np.amax(fff)))
 
     ret = []
-    thresh = bfmed * 0.25
+    thresh = ffmed * 0.25
     for y in range(height):
         for x in range(width):
-            val = bfi.getpixel((x, y))
+            val = ffi.getpixel((x, y))
             if 0 and y == 0 and x < 16:
                 print(x, y, val)
             if val <= thresh:
@@ -53,15 +53,15 @@ def bad_pixs_bf(bff, bfi):
     print("Cold pixels: %u / %u" % (len(ret), width * height))
     return ret
 
-def bad_pixs_df(bff, bfi):
-    bfmed = np.median(bff)
-    print("min: %0.1f, med: %0.1f, max: %0.1f" % (np.amin(bff), bfmed, np.amax(bff)))
+def bad_pixs_df(fff, ffi):
+    ffmed = np.median(fff)
+    print("min: %0.1f, med: %0.1f, max: %0.1f" % (np.amin(fff), ffmed, np.amax(fff)))
 
     ret = []
     thresh = 0xFFFF * 0.25
     for y in range(height):
         for x in range(width):
-            val = bfi.getpixel((x, y))
+            val = ffi.getpixel((x, y))
             if 0 and y == 0 and x < 16:
                 print(x, y, val)
             if val >= thresh:
@@ -73,20 +73,21 @@ def bad_pixs_df(bff, bfi):
 def main():
     import argparse 
     
-    parser = argparse.ArgumentParser(description='Replay captured USB packets')
+    parser = argparse.ArgumentParser(description='')
     parser.add_argument('--images', type=int, default=0, help='Only take first n images, for debugging')
-    parser.add_argument('bf_dir', help='')
+    parser.add_argument('ff_dir', help='')
     parser.add_argument('df_dir', help='')
     parser.add_argument('cal_dir', help='')
     args = parser.parse_args()
     
     cal_dir = args.cal_dir
+    mkdir_p(cal_dir)
     badimg = Image.new("1", (height, width), "Black")
 
-    bff, bfi = util.average_dir(args.bf_dir, images=args.images)
-    bfi.save(cal_dir + '/bf.png')
-    util.histeq_im(bfi).save(cal_dir + '/bfe.png')
-    for x, y in bad_pixs_bf(bff, bfi):
+    fff, ffi = util.average_dir(args.ff_dir, images=args.images)
+    ffi.save(cal_dir + '/ff.png')
+    util.histeq_im(ffi).save(cal_dir + '/ffe.png')
+    for x, y in bad_pixs_ff(fff, ffi):
         badimg.putpixel((x, y), 1)
 
     dff, dfi = util.average_dir(args.df_dir, images=args.images)
