@@ -12,6 +12,7 @@ Arbitrarily going to set to black to good pixel, white for bad pixel
 from faxitron.util import hexdump, add_bool_arg, default_date_dir, mkdir_p
 from faxitron import ham
 from faxitron import util
+from faxitron.util import width, height, depth
 
 import binascii
 import glob
@@ -21,44 +22,6 @@ import os
 import sys
 import time
 import usb1
-
-depth = 2
-height, width = 1032, 1032
-
-def average_dir(din, images=0):
-    pixs = width * height
-    imgs = []
-    print('Reading %s' % din)
-    for fni, fn in enumerate(glob.glob(din + "/cap_*.png")):
-        imgs.append(Image.open(fn))
-        if images and fni + 1 >= images:
-            break
-
-    statef = np.zeros((height, width), np.float)
-    for im in imgs:
-        statef = statef + np.array(im, dtype=np.float) / len(imgs)
-    #return statef, None
-    rounded = np.round(statef)
-    #print("row1: %s" % rounded[1])
-    statei = np.array(rounded, dtype=np.uint16)
-    #print(len(statei), len(statei[0]), len(statei[0]))
-
-    # for some reason I isn't working correctly
-    # only L
-    #im = Image.fromarray(statei, mode="I")
-    #im = Image.fromarray(statei, mode="L")
-    # workaround by plotting manually
-    im = Image.new("I", (height, width), "Black")
-    for y, row in enumerate(statei):
-        for x, val in enumerate(row):
-            # this causes really weird issues if not done
-            val = int(val)
-            im.putpixel((x, y), val)
-            if 0 and y == 0 and x < 16:
-                print(x, y, val, im.getpixel((x, y)))
-                im.putpixel((x, y), val)
-
-    return statef, im
 
 
 """
@@ -120,21 +83,19 @@ def main():
     cal_dir = args.cal_dir
     badimg = Image.new("1", (height, width), "Black")
 
-    bff, bfi = average_dir(args.bf_dir, images=args.images)
+    bff, bfi = util.average_dir(args.bf_dir, images=args.images)
     bfi.save(cal_dir + '/bf.png')
     util.histeq_im(bfi).save(cal_dir + '/bfe.png')
     for x, y in bad_pixs_bf(bff, bfi):
         badimg.putpixel((x, y), 1)
 
-    dff, dfi = average_dir(args.df_dir, images=args.images)
+    dff, dfi = util.average_dir(args.df_dir, images=args.images)
     dfi.save(cal_dir + '/df.png')
     util.histeq_im(dfi).save(cal_dir + '/dfe.png')
     for x, y in bad_pixs_df(dff, dfi):
         badimg.putpixel((x, y), 1)
 
     badimg.save(cal_dir + '/bad.png')
-
-    #dff, dfi = average_dir(args.df_dir)
     
     print("done")
 
