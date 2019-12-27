@@ -11,14 +11,18 @@ from uvscada.util import hexdump, add_bool_arg
 from PIL import Image
 import os
 from faxitron import ham
+import glob
 
-def default_dir():
+def default_dir(postfix):
     datestr = datetime.datetime.now().isoformat()[0:10]
     n = 1
     while True:
         fn = 'out/%s_%02u' % (datestr, n)
-        if not os.path.exists(fn):
-            return fn
+        if len(glob.glob(fn + '*')) == 0:
+            if postfix:
+                return fn + '_' + postfix
+            else:
+                return fn
         n += 1
 
 
@@ -40,11 +44,12 @@ def main():
     parser.add_argument('--dir', default=None, help='Output dir')
     parser.add_argument('-n', default=1, type=int, help='Number images')
     parser.add_argument('--exp', default=250, type=int, help='Exposure ms')
+    parser.add_argument('--postfix', default=None, help='')
     args = parser.parse_args()
 
     outdir = args.dir
     if outdir is None:
-        outdir = default_dir()
+        outdir = default_dir(args.postfix)
     mkdir_p(outdir)
 
     def cap_cb(n, buff):
