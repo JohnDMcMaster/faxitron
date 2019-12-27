@@ -135,12 +135,15 @@ def main():
     parser.add_argument('--hist-eq-roi', default=None, help='hist eq x1,y1,x2,y2')
     add_bool_arg(parser, "--hist-eq", default=True)
     add_bool_arg(parser, "--invert", default=True)
+    add_bool_arg(parser, "--rescale", default=True)
+    add_bool_arg(parser, "--bpr", default=True)
+    add_bool_arg(parser, "--raw", default=False)
     parser.add_argument('--scalar', default=None, type=float, help='')
     parser.add_argument('dir_in', help='')
     parser.add_argument('fn_out', default=None, nargs='?', help='')
     args = parser.parse_args()
 
-    run(args.dir_in, args.fn_out, cal_dir=args.cal_dir, hist_eq=args.hist_eq, invert=args.invert, hist_eq_roi=util.parse_roi(args.hist_eq_roi), scalar=args.scalar)
+    run(args.dir_in, args.fn_out, cal_dir=args.cal_dir, hist_eq=args.hist_eq, invert=args.invert, hist_eq_roi=util.parse_roi(args.hist_eq_roi), scalar=args.scalar, rescale=args.rescale, bpr=args.bpr, raw=args.raw)
 
     print("done")
 
