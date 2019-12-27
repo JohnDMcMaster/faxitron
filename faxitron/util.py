@@ -140,25 +140,6 @@ def im_inv16_slow(im):
     ret = Image.fromarray(im32_1d.reshape(im32_2d.shape))
     return ret
 
-
-def decode_i16(buff, wh=None):
-    '''
-    Given raw bin return PIL image object
-    '''
-    width, height = wh or usbint.sz_wh(len(buff))
-    # Some older files had extra data
-    # Consider removing in favor of just truncating the files on disk
-    buff = str(buff[0:2 * width * height])
-
-    # TODO: currently flipping image to preserve original behavior, but probably shouldn't be
-    im = Image.frombytes('I', (width, height), buff, "raw", "I;16", 0, -1)
-    # IOError: not supported for this image mode
-    # im =  PIL.ImageOps.invert(im)
-    im = im_inv16_slow(im)
-    im = im.transpose(PIL.Image.ROTATE_270)
-    return im
-
-
 # Tried to do
 # import PIL.ImageOps
 # img = PIL.ImageOps.equalize(img)

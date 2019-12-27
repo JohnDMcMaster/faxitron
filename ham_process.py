@@ -16,7 +16,7 @@ from faxitron.util import width, height, depth
 
 import binascii
 import glob
-from PIL import Image
+from PIL import Image, ImageOps
 import numpy as np
 import os
 import sys
@@ -63,6 +63,7 @@ def main():
     parser.add_argument('--cal-dir', default='cal', help='')
     parser.add_argument('--hist-eq-roi', default=None, help='hist eq x1,y1,x2,y2')
     add_bool_arg(parser, "--hist-eq", default=True)
+    add_bool_arg(parser, "--invert", default=True)
     parser.add_argument('dir_in', help='')
     parser.add_argument('fn_out', default=None, nargs='?', help='')
     args = parser.parse_args()
@@ -121,6 +122,10 @@ def main():
     if bpr:
         im_wip = do_bpr(im_wip, badimg)
 
+    if args.invert:
+        # IOError("not supported for this image mode")
+        # im_wip = ImageOps.invert(im_wip)
+        im_wip = util.im_inv16_slow(im_wip)
     im_wip.save(fn_out)
 
 
