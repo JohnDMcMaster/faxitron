@@ -27,8 +27,8 @@ def main():
     mkdir_p(outdir)
 
     def cap_cb(n, buff):
-        binfn = '%s/%02u.bin' % (outdir, n)
-        pngfn = '%s/%02u.png' % (outdir, n)
+        binfn = '%s/cap_%02u.bin' % (outdir, n)
+        pngfn = '%s/cap_%02u.png' % (outdir, n)
         
         if args.bin:
             print("Saving %s" % binfn)

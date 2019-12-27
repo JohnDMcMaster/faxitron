@@ -119,7 +119,7 @@ def init(dev, exp_ms=500):
     assert get_exp(dev) == exp_ms
 
 
-    validate_read("\x00", bulk1(dev, "\x00\x00\x00\x2D\x00\x00\x00\x02\x00\x01"), "packet 337/338")
+    trig_int(dev)
 
 
     validate_read("\x00", bulk1(dev, "\x00\x00\x00\x2E\x00\x00\x00\x04\x00\x00\x00\x12"), "packet 345/346")
@@ -128,7 +128,7 @@ def init(dev, exp_ms=500):
     set_exp(dev, exp_ms)
 
 
-    validate_read("\x00", bulk1(dev, "\x00\x00\x00\x2D\x00\x00\x00\x02\x00\x01"), "packet 361/362")
+    trig_int(dev)
 
 
     validate_read("\x01", bulk1(dev, 
