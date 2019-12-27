@@ -194,11 +194,16 @@ def cap_img(dev, timeout_ms=2500):
     hexdump(extra, "After image data")
     hexdump(postbuff, "Next packet")
     
-    # strongly correlated to general value
-    assert len(extra) == 2
-    #average = unpack16(extra)
-    average = struct.unpack('<H', extra)[0]
-    print("Read (average?) value: %u / 0x%04X" % (average, average))
+    # on my unit, but Alex gts 6 bytes
+    if len(extra) == 2:
+        #average = unpack16(extra)
+        average = struct.unpack('<H', extra)[0]
+        print("Read (average?) value: %u / 0x%04X" % (average, average))
+    elif len(extra) == 6:
+        print("Extra 6")
+    else:
+        print("WARNING: unknown extra length %u" % len(extra))
+
 
     #xy = 2 * pack2u * 0x4000
     #assert xy < len(buff), (xy, len(buff))
