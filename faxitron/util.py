@@ -223,3 +223,8 @@ def tostr(buff):
         return ''.join([chr(b) for b in buff])
     else:
         assert 0, type(buff)
+
+def parse_roi(s):
+    if s is None:
+        return None
+    return [int(x) for x in s.split(',')]

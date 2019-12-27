@@ -247,7 +247,7 @@ class XRay:
         """
         self.set_timed(round(sec * 10.0))
 
-    def fire(self, timeout=None, verbose=False):
+    def fire_begin(self, timeout=None, verbose=False):
         """
         NOTE: radiation emission
 
@@ -281,12 +281,20 @@ class XRay:
             self.send("C")
             c = self.recv_c()
             assert c == "P"
-    
+        # notably ^C can cause this
+        except:
+            verbose and print("fire: aborting")
+            self.send("A")
+
+    def fire(self, timeout=None, verbose=False):
+        self.fire_begin(timeout=timeout, verbose=verbose)
+
+        try:
             verbose and print("fire: waiting")
             # Wait for x-ray to complete
             c = self.recv_c(timeout=timeout)
             assert c == "S"
-    
+
             # Sanity check the door in case it was opened to interrupt the x-ray
             self.assert_ready()
         # notably ^C can cause this
@@ -295,3 +303,7 @@ class XRay:
             self.send("A")
 
         verbose and print("fire: done")
+
+    def fire_abort(self, verbose=False):
+        verbose and print("fire: aborting")
+        self.send("A")

@@ -55,42 +55,34 @@ def do_bpr(im, badimg):
         ret.putpixel((x, y), im_med3(im, x, y))
     return ret
 
-def main():
-    import argparse 
-    
-    parser = argparse.ArgumentParser(description='Replay captured USB packets')
-    parser.add_argument('--images', type=int, default=0, help='Only take first n images, for debugging')
-    parser.add_argument('--cal-dir', default='cal', help='')
-    parser.add_argument('--hist-eq-roi', default=None, help='hist eq x1,y1,x2,y2')
-    add_bool_arg(parser, "--hist-eq", default=True)
-    add_bool_arg(parser, "--invert", default=True)
-    parser.add_argument('dir_in', help='')
-    parser.add_argument('fn_out', default=None, nargs='?', help='')
-    args = parser.parse_args()
-
-    cal_dir = args.cal_dir
-    if not args.fn_out:
-        dir_in = args.dir_in
+def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=None):
+    cal_dir = cal_dir
+    if not fn_out:
+        dir_in = dir_in
         if dir_in[-1] == '/':
             dir_in = dir_in[:-1]
         fn_out = dir_in + '.png'
         fn_oute = dir_in + '_e.png'
     else:
-        fn_out = args.fn_out
-        fn_oute = args.fn_out
+        fn_out = fn_out
+        fn_oute = fn_out
 
 
-    _imgn, img_in = util.average_dir(args.dir_in)
+    _imgn, img_in = util.average_dir(dir_in)
 
     rescale = False
     bpr = True
 
-    badimg = Image.open(os.path.join(args.cal_dir, 'bad.png'))
+    badimg = Image.open(os.path.join(cal_dir, 'bad.png'))
     
+    desc = dir_in
+    print('Processing %s' % desc)
+    
+    im_wip = img_in
     if rescale:
-        ffimg = Image.open(os.path.join(args.cal_dir, 'ff.png'))
+        ffimg = Image.open(os.path.join(cal_dir, 'ff.png'))
         np_ff2 = np.array(ffimg)
-        dfimg = Image.open(os.path.join(args.cal_dir, 'df.png'))
+        dfimg = Image.open(os.path.join(cal_dir, 'df.png'))
         np_df2 = np.array(dfimg)
 
         # ff *should* be brighter than df
@@ -107,11 +99,6 @@ def main():
         cal_det = np.maximum(cal_det, u16_ones)
         cal_scalar = 0xFFFF / cal_det
 
-    desc = args.dir_in
-    print('Processing %s' % desc)
-    
-    im_wip = img_in
-    if rescale:
         np_in2 = np.array(im_wip)
         np_scaled = (np_in2 - mins) * cal_scalar
         # If it clipped, squish to good values
@@ -122,16 +109,16 @@ def main():
     if bpr:
         im_wip = do_bpr(im_wip, badimg)
 
-    if args.invert:
+    if invert:
         # IOError("not supported for this image mode")
         # im_wip = ImageOps.invert(im_wip)
         im_wip = util.im_inv16_slow(im_wip)
     im_wip.save(fn_out)
 
 
-    if args.hist_eq:
-        if args.hist_eq_roi:
-            x1, y1, x2, y2 = [int(x) for x in args.hist_eq_roi.split(',')]
+    if hist_eq:
+        if hist_eq_roi:
+            x1, y1, x2, y2 = hist_eq_roi
             ref_im = im_wip.crop((x1, y1, x2, y2))
         else:
             ref_im = im_wip
@@ -141,6 +128,21 @@ def main():
         wip_np2 = util.histeq_np_apply(wip_np2, util.histeq_np_create(ref_np2))
         im_wip = util.npf2im(wip_np2)
         im_wip.save(fn_oute)
+
+def main():
+    import argparse 
+    
+    parser = argparse.ArgumentParser(description='Replay captured USB packets')
+    #parser.add_argument('--images', type=int, default=0, help='Only take first n images, for debugging')
+    parser.add_argument('--cal-dir', default='cal', help='')
+    parser.add_argument('--hist-eq-roi', default=None, help='hist eq x1,y1,x2,y2')
+    add_bool_arg(parser, "--hist-eq", default=True)
+    add_bool_arg(parser, "--invert", default=True)
+    parser.add_argument('dir_in', help='')
+    parser.add_argument('fn_out', default=None, nargs='?', help='')
+    args = parser.parse_args()
+
+    run(args.dir_in, args.fn_out, cal_dir=args.cal_dir, hist_eq=args.hist_eq, invert=args.invert, hist_eq_roi=util.parse_roi(args.hist_eq_roi))
 
     print("done")
 
