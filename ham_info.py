@@ -20,7 +20,9 @@ def main():
     mkdir_p(outdir)
     info = ham.get_info(h.dev)
     util.hexdump(info)
-    open("%s/info.bin" % outdir, "wb").write(info)
+    fn = "%s/info.bin" % outdir
+    print("Writing %s" % fn)
+    open(fn, "wb").write(info)
 
 if __name__ == "__main__":
     main()
