@@ -61,6 +61,8 @@ def main():
     parser = argparse.ArgumentParser(description='Replay captured USB packets')
     parser.add_argument('--images', type=int, default=0, help='Only take first n images, for debugging')
     parser.add_argument('--cal-dir', default='cal', help='')
+    parser.add_argument('--hist-eq-roi', default=None, help='hist eq x1,y1,x2,y2')
+    add_bool_arg(parser, "--hist-eq", default=True)
     parser.add_argument('dir_in', help='')
     parser.add_argument('fn_out', default=None, nargs='?', help='')
     args = parser.parse_args()
@@ -71,8 +73,10 @@ def main():
         if dir_in[-1] == '/':
             dir_in = dir_in[:-1]
         fn_out = dir_in + '.png'
+        fn_oute = dir_in + '_e.png'
     else:
         fn_out = args.fn_out
+        fn_oute = args.fn_out
 
 
     _imgn, img_in = util.average_dir(args.dir_in)
@@ -102,24 +106,36 @@ def main():
         cal_det = np.maximum(cal_det, u16_ones)
         cal_scalar = 0xFFFF / cal_det
 
-    def process(desc, im_in, fn_out):
-        print('Processing %s' % desc)
-        
-        im_wip = im_in
-        if rescale:
-            np_in2 = np.array(im_wip)
-            np_scaled = (np_in2 - mins) * cal_scalar
-            # If it clipped, squish to good values
-            np_scaled = np.minimum(np_scaled, u16_maxs)
-            np_scaled = np.maximum(np_scaled, u16_mins)
-            im_wip = Image.fromarray(np_scaled).convert("I")
-        
-        if bpr:
-            im_wip = do_bpr(im_wip, badimg)
+    desc = args.dir_in
+    print('Processing %s' % desc)
+    
+    im_wip = img_in
+    if rescale:
+        np_in2 = np.array(im_wip)
+        np_scaled = (np_in2 - mins) * cal_scalar
+        # If it clipped, squish to good values
+        np_scaled = np.minimum(np_scaled, u16_maxs)
+        np_scaled = np.maximum(np_scaled, u16_mins)
+        im_wip = Image.fromarray(np_scaled).convert("I")
 
-        im_wip.save(fn_out)
-    process(args.dir_in, img_in, fn_out)
+    if bpr:
+        im_wip = do_bpr(im_wip, badimg)
 
+    im_wip.save(fn_out)
+
+
+    if args.hist_eq:
+        if args.hist_eq_roi:
+            x1, y1, x2, y2 = [int(x) for x in args.hist_eq_roi.split(',')]
+            ref_im = im_wip.crop((x1, y1, x2, y2))
+        else:
+            ref_im = im_wip
+
+        ref_np2 = np.array(ref_im)
+        wip_np2 = np.array(im_wip)
+        wip_np2 = util.histeq_np_apply(wip_np2, util.histeq_np_create(ref_np2))
+        im_wip = util.npf2im(wip_np2)
+        im_wip.save(fn_oute)
 
     print("done")
 

@@ -96,11 +96,23 @@ def histeq_np(npim, nbr_bins=256):
     Given a numpy nD array (ie image), return a histogram equalized numpy nD array of pixels
     That is, return 2D if given 2D, or 1D if 1D
     '''
+    return histeq_np_apply(npim, histeq_np_create(npim, nbr_bins=nbr_bins))
+    
+
+def histeq_np_create(npim, nbr_bins=256):
+    '''
+    Given a numpy nD array (ie image), return a histogram equalized numpy nD array of pixels
+    That is, return 2D if given 2D, or 1D if 1D
+    '''
 
     # get image histogram
-    imhist, bins = np.histogram(npim.flatten(), nbr_bins, normed=True)
-    cdf = imhist.cumsum()  #cumulative distribution function
-    cdf = 0xFFFF * cdf / cdf[-1]  #normalize
+    imhist,bins = np.histogram(npim.flatten(), nbr_bins, normed=True)
+    cdf = imhist.cumsum() #cumulative distribution function
+    cdf = 0xFFFF * cdf / cdf[-1] #normalize
+    return cdf, bins
+
+def histeq_np_apply(npim, create):
+    cdf, bins = create
 
     # use linear interpolation of cdf to find new pixel values
     ret1d = np.interp(npim.flatten(), bins[:-1], cdf)
@@ -170,10 +182,7 @@ def histeq_im(im, nbr_bins=256):
 depth = 2
 height, width = 1032, 1032
 
-def average_imgs(imgs):
-    statef = np.zeros((height, width), np.float)
-    for im in imgs:
-        statef = statef + np.array(im, dtype=np.float) / len(imgs)
+def npf2im(statef):
     #return statef, None
     rounded = np.round(statef)
     #print("row1: %s" % rounded[1])
@@ -194,8 +203,14 @@ def average_imgs(imgs):
             if 0 and y == 0 and x < 16:
                 print(x, y, val, im.getpixel((x, y)))
                 im.putpixel((x, y), val)
+    return im
 
-    return statef, im
+def average_imgs(imgs):
+    statef = np.zeros((height, width), np.float)
+    for im in imgs:
+        statef = statef + np.array(im, dtype=np.float) / len(imgs)
+
+    return statef, npf2im(statef)
 
 def average_dir(din, images=0, verbose=1):
     pixs = width * height
