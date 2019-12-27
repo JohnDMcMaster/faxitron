@@ -47,7 +47,7 @@ def main():
     # Generally the center is the most interesting
     parser.add_argument('--hist-eq-roi', default="258,258,516,516", help='hist eq x1,y1,x2,y2')
     add_bool_arg(parser, "--hist-eq", default=True)
-    add_bool_arg(parser, "--invert", default=True)
+    add_bool_arg(parser, "--raw", default=False)
     parser.add_argument('fn_out', default=None, nargs='?', help='')
     args = parser.parse_args()
 
@@ -71,7 +71,7 @@ def main():
     finally:
         xr and xr.fire_abort(verbose=fire_verbose)
 
-    ham_process.run(outdir, args.fn_out, cal_dir=args.cal_dir, hist_eq=args.hist_eq, invert=args.invert, hist_eq_roi=util.parse_roi(args.hist_eq_roi))
+    ham_process.run(outdir, args.fn_out, cal_dir=args.cal_dir, hist_eq=args.hist_eq, raw=args.raw, hist_eq_roi=util.parse_roi(args.hist_eq_roi))
 
     print("done")
 

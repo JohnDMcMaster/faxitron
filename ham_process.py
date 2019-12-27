@@ -55,7 +55,7 @@ def do_bpr(im, badimg):
         ret.putpixel((x, y), im_med3(im, x, y))
     return ret
 
-def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=None, scalar=None):
+def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=None, scalar=None, rescale=True, bpr=True, raw=False):
     cal_dir = cal_dir
     if not fn_out:
         dir_in = dir_in
@@ -70,49 +70,46 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
 
     _imgn, img_in = util.average_dir(dir_in, scalar=scalar)
 
-    rescale = False
-    bpr = True
-
-    badimg = Image.open(os.path.join(cal_dir, 'bad.png'))
-    
     desc = dir_in
     print('Processing %s' % desc)
     
     im_wip = img_in
-    if rescale:
-        ffimg = Image.open(os.path.join(cal_dir, 'ff.png'))
-        np_ff2 = np.array(ffimg)
-        dfimg = Image.open(os.path.join(cal_dir, 'df.png'))
-        np_df2 = np.array(dfimg)
-
-        # ff *should* be brighter than df
-        # (due to .png pixel value inversion convention)
-        mins = np.minimum(np_df2, np_ff2)
-        maxs = np.maximum(np_df2, np_ff2)
+    if not raw:
+        if rescale:
+            ffimg = Image.open(os.path.join(cal_dir, 'ff.png'))
+            np_ff2 = np.array(ffimg)
+            dfimg = Image.open(os.path.join(cal_dir, 'df.png'))
+            np_df2 = np.array(dfimg)
     
-        u16_mins = np.full(mins.shape, 0x0000, dtype=np.dtype('float'))
-        u16_ones = np.full(mins.shape, 0x0001, dtype=np.dtype('float'))
-        u16_maxs = np.full(mins.shape, 0xFFFF, dtype=np.dtype('float'))
+            # ff *should* be brighter than df
+            # (due to .png pixel value inversion convention)
+            mins = np.minimum(np_df2, np_ff2)
+            maxs = np.maximum(np_df2, np_ff2)
+        
+            u16_mins = np.full(mins.shape, 0x0000, dtype=np.dtype('float'))
+            u16_ones = np.full(mins.shape, 0x0001, dtype=np.dtype('float'))
+            u16_maxs = np.full(mins.shape, 0xFFFF, dtype=np.dtype('float'))
+        
+            cal_det = maxs - mins
+            # Prevent div 0 on bad pixels
+            cal_det = np.maximum(cal_det, u16_ones)
+            cal_scalar = 0xFFFF / cal_det
     
-        cal_det = maxs - mins
-        # Prevent div 0 on bad pixels
-        cal_det = np.maximum(cal_det, u16_ones)
-        cal_scalar = 0xFFFF / cal_det
-
-        np_in2 = np.array(im_wip)
-        np_scaled = (np_in2 - mins) * cal_scalar
-        # If it clipped, squish to good values
-        np_scaled = np.minimum(np_scaled, u16_maxs)
-        np_scaled = np.maximum(np_scaled, u16_mins)
-        im_wip = Image.fromarray(np_scaled).convert("I")
-
-    if bpr:
-        im_wip = do_bpr(im_wip, badimg)
-
-    if invert:
-        # IOError("not supported for this image mode")
-        # im_wip = ImageOps.invert(im_wip)
-        im_wip = util.im_inv16_slow(im_wip)
+            np_in2 = np.array(im_wip)
+            np_scaled = (np_in2 - mins) * cal_scalar
+            # If it clipped, squish to good values
+            np_scaled = np.minimum(np_scaled, u16_maxs)
+            np_scaled = np.maximum(np_scaled, u16_mins)
+            im_wip = Image.fromarray(np_scaled).convert("I")
+    
+        if bpr:
+            badimg = Image.open(os.path.join(cal_dir, 'bad.png'))
+            im_wip = do_bpr(im_wip, badimg)
+    
+        if invert:
+            # IOError("not supported for this image mode")
+            # im_wip = ImageOps.invert(im_wip)
+            im_wip = util.im_inv16_slow(im_wip)
     im_wip.save(fn_out)
 
 

@@ -152,28 +152,65 @@ def cap_img(dev, timeout_ms=2500):
     131 * 16384 = 2146304
     '''
 
-    pack2 = bulkRead(0x82, 0x4000)
-    assert len(pack2) == 2, len(pack2)
-    hexdump(pack2)
 
-    '''
-    pack130 = bulkRead(0x82, 0x4000)
-    assert len(pack130) == 130, len(pack130)
+
+
+
+    print("")
+    print("")
+    print("")
+    pack2 = bulkRead(0x82, 0x4000)
+    hexdump(pack2, "pack2")
+    assert len(pack2) == 2, len(pack2)
+    pack2u = unpack16(pack2)
+    """
+    Not exactly sure how this is suppose to work, but looks to be someting like this
+    """
+    # want_bytes = 2 * pack2u * 0x4000
+    # AssertionError: (640, 20971520, 2130048)
+    # hmm nope
+    # assert want_bytes == imgsz, (pack2u, want_bytes, imgsz)
+    assert pack2u == 0x280
+
     buff = bytearray()
-    for i in range(131):
-        buff += bulkRead(0x82, 0x4000)
-    pack6 = bulkRead(0x82, 0x4000)
-    assert len(pack6) == 6
-    return buff
-    '''
-    
-    buff = bytearray()
-    while True:
+    packets = 0
+    want_bytes = imgsz + 2
+    while len(buff) < want_bytes:
         pack = bulkRead(0x82, 0x4000)
-        if len(pack) == 6:
-            return pack2, buff
-        else:
-            buff += pack
+        buff += pack
+        packets += 1
+
+    # Usually 6 bytes
+    postbuff = bulkRead(0x82, 0x4000)
+
+    ret = buff[0:imgsz]
+    extra = buff[imgsz:]
+
+    print("packets: %u" % packets)
+    hexdump(buff[1032*0:1032*0+16], "First row")
+    hexdump(buff[1032*1:1032*1+16], "Second row")
+    hexdump(buff[1032*1031:1032*1031+16], "Last row")
+    hexdump(buff[-16:], "Last bytes")
+    hexdump(extra, "After image data")
+    hexdump(postbuff, "Next packet")
+    
+    # strongly correlated to general value
+    assert len(extra) == 2
+    #average = unpack16(extra)
+    average = struct.unpack('<H', extra)[0]
+    print("Read (average?) value: %u / 0x%04X" % (average, average))
+
+    #xy = 2 * pack2u * 0x4000
+    #assert xy < len(buff), (xy, len(buff))
+    #hexdump(buff[xy:xy+16], "xy")
+
+    print("")
+    print("")
+    print("")
+
+    assert len(ret) == imgsz, (len(ret), len(buff))
+    return ret
+
 
 def decode(buff):
     '''Given bin return PIL image object'''
@@ -204,6 +241,9 @@ def pack32(n):
 
 def unpack32(buff):
     return struct.unpack('>I', buff)[0]
+
+def unpack16(buff):
+    return struct.unpack('>H', buff)[0]
 
 def get_exp(dev):
     return unpack32(bulk1(dev, b"\x00\x00\x00\x1F\x00\x00\x00\x00"))
@@ -270,10 +310,7 @@ class Hamamatsu:
         print("Collecting")
         for i in range(n):
             print("img %u" % i)
-            pack2, buff = cap_img(self.dev, timeout_ms=(self.exp_ms + 500))
-            assert len(buff) == imgsz + 2, len(buff)
-            postfix = buff[imgsz:]
-            buff = buff[0:imgsz]
+            buff = cap_img(self.dev, timeout_ms=(self.exp_ms + 500))
             buffs.append(buff)
         print("Dispatching")
         for i in range(n):
