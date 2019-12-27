@@ -55,7 +55,7 @@ def do_bpr(im, badimg):
         ret.putpixel((x, y), im_med3(im, x, y))
     return ret
 
-def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=None):
+def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=None, scalar=None):
     cal_dir = cal_dir
     if not fn_out:
         dir_in = dir_in
@@ -68,7 +68,7 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
         fn_oute = fn_out
 
 
-    _imgn, img_in = util.average_dir(dir_in)
+    _imgn, img_in = util.average_dir(dir_in, scalar=scalar)
 
     rescale = False
     bpr = True
@@ -138,11 +138,12 @@ def main():
     parser.add_argument('--hist-eq-roi', default=None, help='hist eq x1,y1,x2,y2')
     add_bool_arg(parser, "--hist-eq", default=True)
     add_bool_arg(parser, "--invert", default=True)
+    parser.add_argument('--scalar', default=None, type=float, help='')
     parser.add_argument('dir_in', help='')
     parser.add_argument('fn_out', default=None, nargs='?', help='')
     args = parser.parse_args()
 
-    run(args.dir_in, args.fn_out, cal_dir=args.cal_dir, hist_eq=args.hist_eq, invert=args.invert, hist_eq_roi=util.parse_roi(args.hist_eq_roi))
+    run(args.dir_in, args.fn_out, cal_dir=args.cal_dir, hist_eq=args.hist_eq, invert=args.invert, hist_eq_roi=util.parse_roi(args.hist_eq_roi), scalar=args.scalar)
 
     print("done")
 

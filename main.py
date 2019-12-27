@@ -38,11 +38,14 @@ def main():
     add_bool_arg(parser, '--bin', default=False, help='Write .bin raw data capture')
     add_bool_arg(parser, '--png', default=True, help='Write normal .png image file')
     parser.add_argument('--dir', default=None, help='Output dir')
-    parser.add_argument('-n', default=1, type=int, help='Number images')
+    # Quick test shows that pretty significant improvement until about 4, then drops off
+    # seems pretty diminished beyond around 8
+    parser.add_argument('-n', default=8, type=int, help='Number images')
     parser.add_argument('--exp', default=2000, type=int, help='Exposure ms')
     parser.add_argument('--postfix', default=None, help='')
     parser.add_argument('--cal-dir', default='cal', help='')
-    parser.add_argument('--hist-eq-roi', default=None, help='hist eq x1,y1,x2,y2')
+    # Generally the center is the most interesting
+    parser.add_argument('--hist-eq-roi', default="258,258,516,516", help='hist eq x1,y1,x2,y2')
     add_bool_arg(parser, "--hist-eq", default=True)
     add_bool_arg(parser, "--invert", default=True)
     parser.add_argument('fn_out', default=None, nargs='?', help='')

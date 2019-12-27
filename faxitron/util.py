@@ -186,14 +186,18 @@ def npf2im(statef):
                 im.putpixel((x, y), val)
     return im
 
-def average_imgs(imgs):
+def average_imgs(imgs, scalar=None):
+    if not scalar:
+        scalar = 1.0
+    scalar = scalar / len(imgs)
+
     statef = np.zeros((height, width), np.float)
     for im in imgs:
-        statef = statef + np.array(im, dtype=np.float) / len(imgs)
+        statef = statef + scalar * np.array(im, dtype=np.float)
 
     return statef, npf2im(statef)
 
-def average_dir(din, images=0, verbose=1):
+def average_dir(din, images=0, verbose=1, scalar=None):
     pixs = width * height
     imgs = []
 
@@ -204,7 +208,7 @@ def average_dir(din, images=0, verbose=1):
         if images and fni + 1 >= images:
             verbose and print("WARNING: only using first %u images" % images)
             break
-    return average_imgs(imgs)
+    return average_imgs(imgs, scalar=scalar)
 
 
 def tobytes(buff):
