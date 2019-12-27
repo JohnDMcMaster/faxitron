@@ -4,36 +4,13 @@
 # cmd: /home/mcmaster/bin/usbrply --device-hi ham/2019-12-26_02_init.pcapng --wrapper --vid 0x0661 --pid 0xa802
 
 import binascii
-import datetime
 import time
 import usb1
-from uvscada.util import hexdump, add_bool_arg
+from faxitron.util import add_bool_arg, default_date_dir, mkdir_p
 from PIL import Image
 import os
 from faxitron import ham
 import glob
-
-def default_dir(postfix):
-    datestr = datetime.datetime.now().isoformat()[0:10]
-    n = 1
-    while True:
-        fn = 'out/%s_%02u' % (datestr, n)
-        if len(glob.glob(fn + '*')) == 0:
-            if postfix:
-                return fn + '_' + postfix
-            else:
-                return fn
-        n += 1
-
-
-def mkdir_p(path):
-    try:
-        os.makedirs(path)
-    except OSError as exc:  # Python >2.5
-        if exc.errno == errno.EEXIST and os.path.isdir(path):
-            pass
-        else:
-            raise
 
 def main():
     import argparse 
@@ -49,7 +26,7 @@ def main():
 
     outdir = args.dir
     if outdir is None:
-        outdir = default_dir(args.postfix)
+        outdir = default_date_dir("out", "", args.postfix)
     mkdir_p(outdir)
 
     def cap_cb(n, buff):
