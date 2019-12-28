@@ -143,11 +143,11 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
             wip_np2 = util.histeq_np_apply(wip_np2, util.histeq_np_create(ref_np2))
             im_wip = util.npf2im(wip_np2)
         elif mode == "convert":
-            fna = "/tmp/ham_hist_a.png"
-            fnb = "/tmp/ham_hist_b.png"
-            im_wip.save(fna)
-            subprocess.check_call("convert %s \( +clone -equalize \) -average %s" % (fna, fnb), shell=True)
-            im_wip = Image.open(fnb)
+            with util.AutoTempFN(suffix='.png') as tmpa:
+                with util.AutoTempFN(suffix='.png') as tmpb:
+                    im_wip.save(tmpa)
+                    subprocess.check_call("convert %s \( +clone -equalize \) -average %s" % (tmpa, tmpb), shell=True)
+                    im_wip = Image.open(tmpb)
         elif mode == "1":
             # OSError: not supported for this image mode
             im_wip = ImageOps.equalize(im_wip, mask=None)

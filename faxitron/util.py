@@ -5,6 +5,7 @@ import glob
 import numpy as np
 from PIL import Image
 import shutil
+import tempfile
 
 def add_bool_arg(parser, yes_arg, default=False, **kwargs):
     dashed = yes_arg.replace('--', '')
@@ -290,3 +291,19 @@ class IOLog(object):
     def write(self, data):
         self.fd.write(data)
         self.out_fd.write(data)
+
+class AutoTempFN:
+    def __init__(self, suffix=''):
+        #self.name = tempfile.mkstemp()
+        f = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        self.name = f.name
+        f.close()
+
+    def __enter__(self):
+        return self.name
+
+    def __exit__(self, type, value, traceback):
+        try:
+            os.unlink(self.name)
+        except:
+            pass
