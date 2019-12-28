@@ -10,6 +10,8 @@ import os
 import struct
 
 imgsz = 1032 * 1032 * 2
+# TODO: consider upshifting to make raw easier to see
+PIX_MAX = 0x3FFF
 
 def validate_read(expected, actual, msg):
     expected = tobytes(expected)

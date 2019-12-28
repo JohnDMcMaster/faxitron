@@ -36,12 +36,12 @@ def bad_pixs_ff1(fff, ffi):
     #y = i // width
 """
 
-def bad_pixs_ff(fff, ffi):
+def bad_pixs_ff(fff, ffi, thresh_scalar=0.25):
     ffmed = np.median(fff)
     print("min: %0.1f, med: %0.1f, max: %0.1f" % (np.amin(fff), ffmed, np.amax(fff)))
 
     ret = []
-    thresh = ffmed * 0.25
+    thresh = ffmed * thresh_scalar
     for y in range(height):
         for x in range(width):
             val = ffi.getpixel((x, y))
@@ -53,12 +53,12 @@ def bad_pixs_ff(fff, ffi):
     print("Cold pixels: %u / %u" % (len(ret), width * height))
     return ret
 
-def bad_pixs_df(fff, ffi):
+def bad_pixs_df(fff, ffi, thresh_scalar=0.25):
     ffmed = np.median(fff)
     print("min: %0.1f, med: %0.1f, max: %0.1f" % (np.amin(fff), ffmed, np.amax(fff)))
 
     ret = []
-    thresh = 0xFFFF * 0.25
+    thresh = ham.PIX_MAX * thresh_scalar
     for y in range(height):
         for x in range(width):
             val = ffi.getpixel((x, y))
@@ -75,6 +75,8 @@ def main():
     
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--images', type=int, default=0, help='Only take first n images, for debugging')
+    parser.add_argument('--ff-thresh', default=0.25, type=float, help='')
+    parser.add_argument('--df-thresh', default=0.25, type=float, help='')
     parser.add_argument('ff_dir', help='')
     parser.add_argument('df_dir', help='')
     parser.add_argument('cal_dir', help='')
@@ -87,13 +89,13 @@ def main():
     fff, ffi = util.average_dir(args.ff_dir, images=args.images)
     ffi.save(cal_dir + '/ff.png')
     util.histeq_im(ffi).save(cal_dir + '/ffe.png')
-    for x, y in bad_pixs_ff(fff, ffi):
+    for x, y in bad_pixs_ff(fff, ffi, thresh_scalar=args.ff_thresh):
         badimg.putpixel((x, y), 1)
 
     dff, dfi = util.average_dir(args.df_dir, images=args.images)
     dfi.save(cal_dir + '/df.png')
     util.histeq_im(dfi).save(cal_dir + '/dfe.png')
-    for x, y in bad_pixs_df(dff, dfi):
+    for x, y in bad_pixs_df(dff, dfi, thresh_scalar=args.df_thresh):
         badimg.putpixel((x, y), 1)
 
     badimg.save(cal_dir + '/bad.png')
