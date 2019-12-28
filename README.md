@@ -35,7 +35,7 @@ See also: https://github.com/JohnDMcMaster/gxs700
 Developed on Ubuntu 16.04 x64
 
 ```
-sudo apt-get install -y python3-numpy python3-serial
+sudo apt-get install -y python3-numpy python3-scipy python3-pil python3-serial
 sudo pip3 install libusb1
 ./udev.sh
 ```
@@ -69,8 +69,8 @@ Some general notes:
 
 ```
 mkdir cal
-python3 ham_raw.py --kvp 0 -n 32 --dir cal/df
-python3 ham_raw.py --kvp 0 -n 32 --dir cal/ff
+python3 main.py --kvp 0 -n 32 --dir cal/df
+python3 main.py --kvp 0 -n 32 --dir cal/ff
 python3 cal.py cal/ff cal/df cal
 ```
 Take a look at the bad pixel map (bad.png) to see if it looks reasonable. Compare it to the histogram equalized flat field (ff) and dark field images to see if any pixels should be added to it manually.
