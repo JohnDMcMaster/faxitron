@@ -42,7 +42,13 @@ sudo pip3 install libusb1
 
 Use a USB serial converter to connect to the x-ray. Default is /dev/ttyUSB0. Also plug in the sensor
 
-Verify installation by closing the door and running:
+Verify installation by checking communication:
+
+```
+python3 dump.py
+```
+
+Then if you wish close the door and take an uncalibrated x-ray:
 
 ```
 python3 main.py --raw
