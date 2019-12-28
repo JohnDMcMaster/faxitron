@@ -100,16 +100,22 @@ def histeq_np(npim, nbr_bins=256):
     return histeq_np_apply(npim, histeq_np_create(npim, nbr_bins=nbr_bins))
     
 
-def histeq_np_create(npim, nbr_bins=256):
+def histeq_np_create(npim, nbr_bins=256, verbose=0):
     '''
     Given a numpy nD array (ie image), return a histogram equalized numpy nD array of pixels
     That is, return 2D if given 2D, or 1D if 1D
     '''
 
     # get image histogram
-    imhist,bins = np.histogram(npim.flatten(), nbr_bins, normed=True)
+    flat = npim.flatten()
+    verbose and print('flat', flat)
+    imhist, bins = np.histogram(flat, nbr_bins, normed=True)
+    verbose and print('imhist', imhist)
+    verbose and print('imhist', bins)
     cdf = imhist.cumsum() #cumulative distribution function
+    verbose and print('cdfraw', cdf)
     cdf = 0xFFFF * cdf / cdf[-1] #normalize
+    verbose and print('cdfnorm', cdf)
     return cdf, bins
 
 def histeq_np_apply(npim, create):

@@ -51,7 +51,7 @@ def im_med3(im, x, y):
             if yp < 0 or yp >= height:
                 continue
             pixs.append(im.getpixel((xp, yp)))
-    return statistics.median(pixs)
+    return int(statistics.median(pixs))
 
 
 def do_bpr(im, badimg):
@@ -78,9 +78,15 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
 
     desc = dir_in
     print('Processing %s' % desc)
-    
+
     im_wip = img_in
+    print("Avg min: %u, max: %u" % (np.ndarray.min(np.array(im_wip)), np.ndarray.max(np.array(im_wip))))
     if not raw:
+        if bpr:
+            badimg = Image.open(os.path.join(cal_dir, 'bad.png'))
+            im_wip = do_bpr(im_wip, badimg)
+            print("BPR min: %u, max: %u" % (np.ndarray.min(np.array(im_wip)), np.ndarray.max(np.array(im_wip))))
+    
         if rescale:
             ffimg = Image.open(os.path.join(cal_dir, 'ff.png'))
             np_ff2 = np.array(ffimg)
@@ -107,17 +113,20 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
             np_scaled = np.minimum(np_scaled, u16_maxs)
             np_scaled = np.maximum(np_scaled, u16_mins)
             im_wip = Image.fromarray(np_scaled).convert("I")
-    
-        if bpr:
-            badimg = Image.open(os.path.join(cal_dir, 'bad.png'))
-            im_wip = do_bpr(im_wip, badimg)
+            print("Rescale min: %u, max: %u" % (np.ndarray.min(np.array(im_wip)), np.ndarray.max(np.array(im_wip))))
     
         if invert:
             # IOError("not supported for this image mode")
             # im_wip = ImageOps.invert(im_wip)
             im_wip = util.im_inv16_slow(im_wip)
+            print("Invert min: %u, max: %u" % (np.ndarray.min(np.array(im_wip)), np.ndarray.max(np.array(im_wip))))
+    print("Save %s" % fn_out)
     im_wip.save(fn_out)
 
+
+    # https://stackoverflow.com/questions/43569566/adaptive-histogram-equalization-in-python
+    # simple implementation
+    # CV2 might also work
 
     if hist_eq:
         mode = os.getenv("FAXITRON_EQ_MODE", "0")
@@ -153,7 +162,9 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
             im_wip = util.npf2im(exposure.equalize_adapthist(imnp, clip_limit=0.03))
         else:
             raise Exception(mode)
+        print("Save %s" % fn_oute)
         im_wip.save(fn_oute)
+        print("Eq min: %u, max: %u" % (np.ndarray.min(np.array(im_wip)), np.ndarray.max(np.array(im_wip))))
 
 def main():
     import argparse 
