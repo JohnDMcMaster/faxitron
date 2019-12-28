@@ -74,12 +74,11 @@ Some general notes:
 * About 4 images is good to reduce noise, with slight improvement at 8. Beyond that there is minor improvement. As such capture default is 8, but for calibration we collect more
 
 ```
-mkdir cal
-python3 main.py --kvp 0 -n 32 --dir cal/df
-python3 main.py --kvp 0 -n 32 --dir cal/ff
-python3 cal.py cal/ff cal/df cal
+./cal.sh
 ```
-Take a look at the bad pixel map (bad.png) to see if it looks reasonable. Compare it to the histogram equalized flat field (ff) and dark field images to see if any pixels should be added to it manually.
+
+This should write some files to the folder "cal". Take a look at the bad pixel map (bad.png) to see if it looks reasonable.
+Compare it to the histogram equalized flat field (ff) and dark field images to see if any pixels should be added to it manually.
 
 Other: a bad pixel is currently defined as one that fails to cover at least 25% range. This was chosen fairly arbitrarily and could probably use more thought
 
