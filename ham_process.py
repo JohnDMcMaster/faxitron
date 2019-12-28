@@ -82,11 +82,6 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
     im_wip = img_in
     print("Avg min: %u, max: %u" % (np.ndarray.min(np.array(im_wip)), np.ndarray.max(np.array(im_wip))))
     if not raw:
-        if bpr:
-            badimg = Image.open(os.path.join(cal_dir, 'bad.png'))
-            im_wip = do_bpr(im_wip, badimg)
-            print("BPR min: %u, max: %u" % (np.ndarray.min(np.array(im_wip)), np.ndarray.max(np.array(im_wip))))
-    
         if rescale:
             ffimg = Image.open(os.path.join(cal_dir, 'ff.png'))
             np_ff2 = np.array(ffimg)
@@ -115,6 +110,12 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
             im_wip = Image.fromarray(np_scaled).convert("I")
             print("Rescale min: %u, max: %u" % (np.ndarray.min(np.array(im_wip)), np.ndarray.max(np.array(im_wip))))
     
+        # Seems this needs to be done after scaling or artifacts get amplified
+        if bpr:
+            badimg = Image.open(os.path.join(cal_dir, 'bad.png'))
+            im_wip = do_bpr(im_wip, badimg)
+            print("BPR min: %u, max: %u" % (np.ndarray.min(np.array(im_wip)), np.ndarray.max(np.array(im_wip))))
+
         if invert:
             # IOError("not supported for this image mode")
             # im_wip = ImageOps.invert(im_wip)
