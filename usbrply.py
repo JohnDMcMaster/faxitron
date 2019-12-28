@@ -1,10 +1,34 @@
-from bpmicro.util import str2hex, add_bool_arg
+from faxitron.util import add_bool_arg
 
 import json
 import binascii
 import subprocess
 import os
 import sys
+
+'''
+    (
+    "\x08\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
+    "\x00\x00\xC0\x1E\x00\x00\x85\x00")
+'''
+def str2hex(buff, prefix='', terse=True):
+    if len(buff) == 0:
+        return '""'
+    buff = bytearray(buff)
+    ret = ''
+    if terse and len(buff) > 16:
+        ret += '\n'
+    for i in xrange(len(buff)):
+        if i % 16 == 0:
+            if i != 0:
+                ret += '" \\\n'
+            if len(buff) <= 16:
+                ret += '"'
+            if not terse or len(buff) > 16:
+                ret += '%s"' % prefix
+            
+        ret += "\\x%02X" % (buff[i],)
+    return ret + '"'
 
 pi = None
 ps = None
