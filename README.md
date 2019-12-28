@@ -33,7 +33,7 @@ See also: https://github.com/JohnDMcMaster/gxs700
 Developed on Ubuntu 16.04 x64
 
 ```
-sudo apt-get install -y python3-numpy python3-scipy python3-serial python3-pil
+sudo apt-get install -y python3-numpy python3-serial
 sudo pip3 install libusb1
 ./udev.sh
 ```
@@ -100,11 +100,11 @@ export FAXITRON_EQ_MODE=convert
 ```
 
 0 (default)
--ROI supported
--not dynamic
+* ROI supported
+* not dynamic
 
 convert
--Use the ImageMagick convert command. This is a dynamic algorithm
+* Use the ImageMagick convert command. This is a dynamic algorithm
 
 See also: https://github.com/JohnDMcMaster/faxitron/issues/7
 
