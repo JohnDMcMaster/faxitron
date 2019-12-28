@@ -54,7 +54,7 @@ Images will be stored to directory "out". However, to get good images you should
 
 If you can please run:
 ```
-python3 ham_info.py
+python3 dump.py
 ```
 And send the resulting "dump" folder to JohnDMcMaster at gmail.com. It would also be nice if you can include your cal folder so I can also get a better idea of common sensor issues
 
