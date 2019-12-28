@@ -26,6 +26,8 @@ Other utilities:
 * usbrply.py: convert Wireshark USB .cap file into Python code
 * xray.py: direct x-ray control. Doesn't know about sensor
 
+DC12: not currently supported since I don't have one. But probably not hard to add
+
 See also: https://github.com/JohnDMcMaster/gxs700
 
 ## Installation
