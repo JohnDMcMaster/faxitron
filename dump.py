@@ -37,7 +37,7 @@ def main():
         print("Model: %s" % model)
         print("Version: %s" % ver)
         print("S/N: %s" % sn)
-        fn = "%s/ham_info.bin" % outdir
+        fn = os.path.join(outdir, "ham_info.bin")
         print("Writing %s" % fn)
         open(fn, "w").write(info)
 
@@ -59,7 +59,7 @@ def main():
         print("State: %s" % j["state"])
         print("Exposure time %u ds" % j["timed"])
         print("kVp %u" % j["kvp"])
-        fn = "%s/xray.json" % outdir
+        fn = os.path.join(outdir, "xray.json")
         print("Writing %s" % fn)
         open(fn, 'w').write(json.dumps(j, sort_keys=True, indent=4, separators=(',', ': ')))
 

@@ -5,11 +5,12 @@ from faxitron import ham
 from faxitron import util
 from faxitron import xray
 import ham_process
+import os
 
 def capture(args, outdir):
     def cap_cb(n, buff):
-        binfn = '%s/cap_%02u.bin' % (outdir, n)
-        pngfn = '%s/cap_%02u.png' % (outdir, n)
+        binfn = os.path.join(outdir, 'cap_%02u.bin' % n)
+        pngfn = os.path.join(outdir, 'cap_%02u.png' % n)
         
         if args.bin:
             print("Saving %s" % binfn)

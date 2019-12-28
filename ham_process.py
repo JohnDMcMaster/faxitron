@@ -131,6 +131,7 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
 
     if hist_eq:
         mode = os.getenv("FAXITRON_EQ_MODE", "0")
+        print("Eq mode (FAXITRON_EQ_MODE) %s" % mode)
         if mode == "0":
             if hist_eq_roi:
                 x1, y1, x2, y2 = hist_eq_roi

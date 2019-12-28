@@ -39,3 +39,21 @@ python3 cal.py out/2019-12-26_01_bf_35kvp_2000ms_x32/ out/2019-12-26_02_df_2000m
 
 View results in "cal"
 
+
+Histogram equalization
+
+We've experimented briefly with algorithms. As of 2019-12-27, there are two modes availible
+which can be changed through environment variable FAXITRON_EQ_MODE. ie
+
+```
+export FAXITRON_EQ_MODE=convert
+```
+
+0 (default)
+-ROI supported
+-not dynamic
+
+convert
+-Use the ImageMagick command. This is a dynamic algorithm
+
+

@@ -26,8 +26,8 @@ def main():
         outdir = default_date_dir("out", "", args.postfix)
 
     def cap_cb(n, buff):
-        binfn = '%s/cap_%02u.bin' % (outdir, n)
-        pngfn = '%s/cap_%02u.png' % (outdir, n)
+        binfn = os.path.join(outdir, "cap_%02u.bin" % n)
+        pngfn = os.path.join(outdir, "cap_%02u.png" % n)
         
         if args.bin:
             print("Saving %s" % binfn)

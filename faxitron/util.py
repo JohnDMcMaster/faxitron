@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image
 import shutil
 import tempfile
+import errno
 
 def add_bool_arg(parser, yes_arg, default=False, **kwargs):
     dashed = yes_arg.replace('--', '')
@@ -63,7 +64,7 @@ def default_date_dir(root, prefix, postfix):
 
     n = 1
     while True:
-        fn = '%s/%s%s_%02u' % (root, prefix, datestr, n)
+        fn = os.path.join(root, '%s%s_%02u' % (prefix, datestr, n))
         if len(glob.glob(fn + '*')) == 0:
             if postfix:
                 return fn + '_' + postfix
@@ -80,17 +81,11 @@ def mkdir_p(path):
         else:
             raise
 
-def raw2npim1(buff):
-    '''Given raw string, return 1d array of 16 bit unpacked values'''
-    depth = 2
-    width, height = usbint.sz_wh(len(buff))
-
-    buff = bytearray(buff)
-    imnp = np.zeros(width * height)
-
-    for i, y in enumerate(range(0, depth * width * height, depth)):
-        imnp[i] = unpack_pix(buff[y:y + 2])
-    return imnp
+def histeq_im(im, nbr_bins=256):
+    imnp2 = np.array(im)
+    imnp2_eq = histeq_np(imnp2, nbr_bins=nbr_bins)
+    imf = Image.fromarray(imnp2_eq)
+    return imf.convert("I")
 
 
 def histeq_np(npim, nbr_bins=256):
@@ -127,17 +122,6 @@ def histeq_np_apply(npim, create):
     return ret1d.reshape(npim.shape)
 
 
-def npim12raw(rs):
-    '''
-    Given a numpy 1D array of pixels, return a string as if a raw capture
-    '''
-    ret = bytearray()
-
-    for i in xrange(len(rs)):
-        ret += pack_pix(int(rs[i]))
-    return str(ret)
-
-
 # Tried misc other things but this was only thing I could make work
 def im_inv16_slow(im):
     '''Invert 16 bit image pixels'''
@@ -147,26 +131,6 @@ def im_inv16_slow(im):
         im32_1d[i] = 0xFFFF - p
     ret = Image.fromarray(im32_1d.reshape(im32_2d.shape))
     return ret
-
-# Tried to do
-# import PIL.ImageOps
-# img = PIL.ImageOps.equalize(img)
-# but
-# IOError: not supported for this image mode
-# http://www.janeriksolem.net/2009/06/histogram-equalization-with-python-and.html
-def histeq(buff, nbr_bins=256):
-    '''Histogram equalize raw buffer, returning a raw buffer'''
-    npim1 = raw2npim1(buff)
-    npim1_eq = histeq_np(npim1, nbr_bins)
-    return npim12raw(npim1_eq)
-
-
-def histeq_im(im, nbr_bins=256):
-    imnp2 = np.array(im)
-    imnp2_eq = histeq_np(imnp2, nbr_bins=nbr_bins)
-    imf = Image.fromarray(imnp2_eq)
-    return imf.convert("I")
-
 
 depth = 2
 height, width = 1032, 1032
@@ -207,9 +171,10 @@ def average_dir(din, images=0, verbose=1, scalar=None):
     pixs = width * height
     imgs = []
 
-    verbose and print('Reading %s w/ %u images' % (din, len(glob.glob(din + "/cap_*.png"))))
+    files = list(glob.glob(os.path.join(din, "cap_*.png")))
+    verbose and print('Reading %s w/ %u images' % (din, len(files)))
 
-    for fni, fn in enumerate(glob.glob(din + "/cap_*.png")):
+    for fni, fn in enumerate(files):
         imgs.append(Image.open(fn))
         if images and fni + 1 >= images:
             verbose and print("WARNING: only using first %u images" % images)
