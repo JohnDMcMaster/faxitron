@@ -28,8 +28,8 @@ def main():
     if args.ham:
         print("")
         print("Sensor")
-        h = ham.Hamamatsu()
-    
+        h = ham.Hamamatsu(init=False)
+
         info = ham.get_info(h.dev)
         # util.hexdump(info)
         vendor, model, ver, sn = ham.parse_info(info)

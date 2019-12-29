@@ -9,6 +9,11 @@ from PIL import Image
 import os
 import struct
 
+HAM_VID = 0x0661
+# C9730DK-11
+DC5_PID = 0xA802
+DC12_PID = 0xA800
+
 imgsz = 1032 * 1032 * 2
 # TODO: consider upshifting to make raw easier to see
 PIX_MAX = 0x3FFF
@@ -63,7 +68,7 @@ def get_info(dev):
     assert len(ret) == 0x80
     return ret
 
-def init(dev, exp_ms=500):
+def ham_init(dev, exp_ms=500):
     validate_read(b"\x01", bulk1(dev, b"\x00\x00\x00\x00\x00\x00\x00\x00"), "packet 211/212")
 
     get_info(dev)
@@ -290,7 +295,7 @@ def open_dev(usbcontext=None, verbose=False):
     for udev in usbcontext.getDeviceList(skip_on_error=True):
         vid = udev.getVendorID()
         pid = udev.getProductID()
-        if (vid, pid) == (0x0661, 0xA802):
+        if (vid, pid) in ((HAM_VID, DC5_PID), (HAM_VID, DC12_PID)):
             if verbose:
                 print('')
                 print('')
@@ -304,13 +309,14 @@ def open_dev(usbcontext=None, verbose=False):
     raise Exception("Failed to find a device")
 
 class Hamamatsu:
-    def __init__(self, exp_ms=250):
+    def __init__(self, exp_ms=250, init=True):
         usbcontext = usb1.USBContext()
         self.dev = open_dev(usbcontext)
         self.dev.claimInterface(0)
         self.dev.resetDevice()
         self.exp_ms = exp_ms
-        init(self.dev, exp_ms=self.exp_ms)
+        if init:
+            ham_init(self.dev, exp_ms=self.exp_ms)
 
     def cap(self, cb, n=1):
         buffs=[]
