@@ -40,7 +40,7 @@ def make_bpm(im):
     return ret
 
 
-def im_med3(im, x, y):
+def im_med3(im, x, y, badimg):
     pixs = []
     for dx in range(-1, 2, 1):
         xp = x + dx
@@ -50,7 +50,8 @@ def im_med3(im, x, y):
             yp = y + dy
             if yp < 0 or yp >= height:
                 continue
-            pixs.append(im.getpixel((xp, yp)))
+            if not badimg.getpixel((xp, yp)):
+                pixs.append(im.getpixel((xp, yp)))
     return int(statistics.median(pixs))
 
 
@@ -58,7 +59,7 @@ def do_bpr(im, badimg):
     ret = im.copy()
     bad_pixels = make_bpm(badimg)
     for x, y in bad_pixels:
-        ret.putpixel((x, y), im_med3(im, x, y))
+        ret.putpixel((x, y), im_med3(im, x, y, badimg))
     return ret
 
 def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=None, scalar=None, rescale=True, bpr=True, raw=False):
