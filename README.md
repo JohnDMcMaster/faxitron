@@ -32,15 +32,22 @@ See also: https://github.com/JohnDMcMaster/gxs700
 
 ## Installation
 
-Developed on Ubuntu 16.04 x64
+Requirements and strong recommendations:
+  * Faxitron x-ray as found on DX-50 (and maybe MX-20)
+  * Hammamatsu C9730DK-11 sensor as found on DX-50 w/ DC5 option
+  * Ubuntu 16.04 x64. While code is cross platform, Ubuntu at least is strongly reccomended during early testing
+  * USB serial converter
 
 ```
 sudo apt-get install -y python3-numpy python3-scipy python3-pil python3-serial
 sudo pip3 install libusb1
 ./udev.sh
+sudo usermod -a -G plugdev $USER
 ```
 
-Use a USB serial converter to connect to the x-ray. Default is /dev/ttyUSB0. Also plug in the sensor
+You may need to restart your computer for changes to take effect.
+
+Plug in the sensor USB and use a USB serial converter to connect to the x-ray (default: /dev/ttyUSB0)
 
 Verify installation by checking communication:
 
