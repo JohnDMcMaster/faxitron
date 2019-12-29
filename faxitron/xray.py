@@ -135,7 +135,11 @@ class XRay:
         Seltzman: 4.2
         Wonder what the differences are?
         """
-        return float(self.send("?R", recv=True))
+        vers = self.send("?R", recv=True)
+        # Verify its a valid version
+        float(vers)
+        # But return as string to avoid precision issues
+        return vers
 
     def assert_ready(self):
         s = self.get_state()
