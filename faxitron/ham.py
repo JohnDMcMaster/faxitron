@@ -182,14 +182,16 @@ def cap_img(dev, timeout_ms=2500):
     buff = bytearray()
     packets = 0
     want_bytes = imgsz + 2
-    while len(buff) < want_bytes:
-        pack = bulkRead(0x82, 0x4000)
+    while True:
+        remain = want_bytes - len(buff)
+        if remain <= 0:
+            break
+        pack = bulkRead(0x82, min(0x4000, remain))
         buff += pack
         packets += 1
 
-    # Usually 6 bytes
-    postbuff = bulkRead(0x82, 0x4000)
-
+    postbuff = bulkRead(0x82, 6)
+    
     ret = buff[0:imgsz]
     extra = buff[imgsz:]
 
@@ -200,21 +202,11 @@ def cap_img(dev, timeout_ms=2500):
     hexdump(buff[-16:], "Last bytes")
     hexdump(extra, "After image data")
     hexdump(postbuff, "Next packet")
-    
-    # on my unit, but Alex gts 6 bytes
-    if len(extra) == 2:
-        #average = unpack16(extra)
-        average = struct.unpack('<H', extra)[0]
-        print("Read (average?) value: %u / 0x%04X" % (average, average))
-    elif len(extra) == 6:
-        print("Extra 6")
-    else:
-        print("WARNING: unknown extra length %u" % len(extra))
 
+    average = struct.unpack('<H', extra)[0]
+    print("Read (average?) value: %u / 0x%04X" % (average, average))
+    assert len(postbuff) <= 6
 
-    #xy = 2 * pack2u * 0x4000
-    #assert xy < len(buff), (xy, len(buff))
-    #hexdump(buff[xy:xy+16], "xy")
 
     print("")
     print("")
