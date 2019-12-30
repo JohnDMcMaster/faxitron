@@ -257,6 +257,15 @@ def cap_img1(dev, usbcontext, timeout_ms=2500, verbose=1):
         hexdump(footer, "Image footer")
         #hexdump(rawbuff, "Additional bytes")
         print("Additional bytes: %u" % len(rawbuff))
+        syncpos = 0
+        while len(rawbuff):
+            pack2u = unpack16_le(rawbuff[0:2])
+            rawbuff = rawbuff[2:]
+            if pack2u >= 0x4000:
+                print("MSG 0x%04X @ 0x%04X" % (pack2u, syncpos))
+            syncpos += 2
+
+
 
     average = struct.unpack('<H', footer)[0]
     verbose and print("Read (average?) value: %u / 0x%04X" % (average, average))
