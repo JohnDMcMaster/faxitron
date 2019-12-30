@@ -146,7 +146,21 @@ def ham_init(dev, exp_ms=500):
 
     validate_read(b"\x01", bulk1(dev, b"\x00\x00\x00\x0E\x00\x00\x00\x01\x01"), "packet 1398/1399")
 
-def cap_img1(dev, usbcontext, timeout_ms=2500, verbose=1):
+def check_sync(buff, verbose=True):
+    syncpos = 0
+    n = 0
+    while len(buff):
+        if len(buff) % 1000 == 0:
+            print(len(buff))
+        pack2u = unpack16_le(buff[0:2])
+        buff = buff[2:]
+        if pack2u >= 0x4000:
+            verbose and print("MSG 0x%04X @ 0x%04X" % (pack2u, syncpos))
+            n += 1
+        syncpos += 2
+    return n
+
+def cap_img1(dev, usbcontext, timeout_ms=2500, verbose=1, debug=0):
     def bulkRead(endpoint, length, timeout=None):
         return dev.bulkRead(endpoint, length, timeout=timeout_ms)
 
@@ -257,13 +271,8 @@ def cap_img1(dev, usbcontext, timeout_ms=2500, verbose=1):
         hexdump(footer, "Image footer")
         #hexdump(rawbuff, "Additional bytes")
         print("Additional bytes: %u" % len(rawbuff))
-        syncpos = 0
-        while len(rawbuff):
-            pack2u = unpack16_le(rawbuff[0:2])
-            rawbuff = rawbuff[2:]
-            if pack2u >= 0x4000:
-                print("MSG 0x%04X @ 0x%04X" % (pack2u, syncpos))
-            syncpos += 2
+        # very slow
+        debug and check_sync(rawbuff)
 
 
 
@@ -377,6 +386,7 @@ class Hamamatsu:
         self.exp_ms = exp_ms
         if init:
             ham_init(self.dev, exp_ms=self.exp_ms)
+        self.debug = 0
 
     def cap(self, cb, n=1):
         raws=[]
@@ -387,7 +397,11 @@ class Hamamatsu:
         print("Dispatching")
         for i in range(n):
             print("img %u" % i)
-            cb(i, raws[i])
+            raw = raws[i]
+            # very slow
+            if self.debug:
+                assert check_sync(raw), "Found sync word in image data"
+            cb(i, raw)
         print("exp: %u" % get_exp(self.dev))
 
     def set_exp(self, ms):
