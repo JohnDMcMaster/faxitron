@@ -43,6 +43,9 @@ sudo apt-get install -y python3-numpy python3-scipy python3-pil python3-serial
 sudo pip3 install libusb1
 ./udev.sh
 sudo usermod -a -G plugdev $USER
+
+# Optional
+sudo apt-get install -y imagemagick
 ```
 
 You may need to restart your computer for changes to take effect.
