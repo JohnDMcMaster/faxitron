@@ -26,6 +26,8 @@ MSG_BEGIN_SZ = 2 + imgsz
 # Payload length: 2 bytes
 # ex: value 3
 MSG_END = 0x8004
+# Observed by Alex
+MSG_WTF = 0x8005
 MSG_END_SZ = 6
 
 # Including average after
@@ -198,9 +200,14 @@ class CapImgN:
         self.running = True
 
     def handle_buff(self, buff):
+        sync = is_sync(buff)
+
+        if sync == MSG_WTF:
+            print("WARNING: MSG_WTF")
+            return
+
         # Wait for begin
         if self.state == MSG_END:
-            sync = is_sync(buff)
             # Can get garbage packets while waiting for begin
             if not sync:
                 return
@@ -218,8 +225,8 @@ class CapImgN:
             self.packets = 0
         # Wait for end
         elif self.state == MSG_BEGIN:
-            sync = is_sync(buff)
             if sync:
+                # alex saw MSG_WTF here
                 assert sync == MSG_END, sync
                 self.process_end(buff)
                 self.rawbuff = None
@@ -430,7 +437,7 @@ class Hamamatsu:
     def cap(self, cb, n=1):
         raws=[]
         print("Collecting")
-        for rawi, (counter, rawimg, _average) in enumerate(cap_imgn(self.dev, self.usbcontext, timeout_ms=(n * self.exp_ms + 5000), n=n)):
+        for rawi, (counter, rawimg, _average) in enumerate(cap_imgn(self.dev, self.usbcontext, timeout_ms=(n * (self.exp_ms + 250) + 1000), n=n)):
             print("img %u" % rawi)
             raws.append(rawimg)
         print("Dispatching")
