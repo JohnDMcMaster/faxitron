@@ -137,7 +137,7 @@ def ham_init(dev, exp_ms=500):
 
     validate_read(b"\x01", bulk1(dev, b"\x00\x00\x00\x0E\x00\x00\x00\x01\x01"), "packet 1398/1399")
 
-def cap_img(dev, timeout_ms=2500):
+def cap_img_st(dev, timeout_ms=2500):
     def bulkRead(endpoint, length, timeout=None):
         return dev.bulkRead(endpoint, length, timeout=timeout_ms)
 
@@ -214,6 +214,124 @@ def cap_img(dev, timeout_ms=2500):
 
     assert len(ret) == imgsz, (len(ret), len(buff))
     return ret
+
+
+
+
+def cap_imgn(dev, usbcontext, n=1, timeout_ms=2500):
+
+    '''
+    Ret buff 1: 2
+    Ret buff 132: 130
+    Ret buff 133: 6
+
+    Ret buff 134: 2
+    Ret buff 265: 130
+    Ret buff 266: 6
+
+    Ret buff 267: 2
+    Ret buff 398: 130
+    Ret buff 399: 6
+
+
+    Others are 16384
+    131 * 16384 = 2146304
+    '''
+
+
+    # Including average after
+    imgx_sz = imgsz + 2
+
+    print("")
+    print("")
+    print("")
+    pack2 = dev.bulkRead(0x82, 2)
+    hexdump(pack2, "pack2")
+    assert len(pack2) == 2, len(pack2)
+    pack2u = unpack16(pack2)
+    """
+    Not exactly sure how this is suppose to work, but looks to be someting like this
+    """
+    # want_bytes = 2 * pack2u * 0x4000
+    # AssertionError: (640, 20971520, 2130048)
+    # hmm nope
+    # assert want_bytes == imgsz, (pack2u, want_bytes, imgsz)
+    assert pack2u == 0x280
+
+    buff = bytearray()
+    packets = [0]
+    want_bytes = (imgx_sz) * n
+    def async_cb(trans):
+        b = trans.getBuffer()
+        buff.extend(b)
+        if len(buff) < want_bytes:
+            trans.submit()
+        else:
+            remain[0] -= 1
+        packets[0] += 1
+
+    trans_l = []
+    remain = [0]
+    # reference only does 31, so stay with that
+    for _i in range(31):
+        trans = dev.getTransfer()
+        trans.setBulk(0x82, 0x4000, callback=async_cb, user_data=None, timeout=1000)
+        trans.submit()
+        trans_l.append(trans)
+        remain[0] += 1
+
+
+
+    yielded = [0]
+    def checkbuff():
+        base = imgx_sz * yielded[0]
+        this = buff[base:base + imgx_sz]
+        if len(this) < imgx_sz:
+            return None
+
+        ret = this[0:imgsz]
+        extra = this[imgsz:]
+
+        hexdump(this[1032*0:1032*0+16], "First row")
+        hexdump(this[1032*1:1032*1+16], "Second row")
+        hexdump(this[1032*1031:1032*1031+16], "Last row")
+        hexdump(this[-16:], "Last bytes")
+        hexdump(extra, "After image data")
+    
+        average = struct.unpack('<H', extra)[0]
+        print("Read (average?) value: %u / 0x%04X" % (average, average))
+
+        assert len(ret) == imgsz, (len(ret), len(this))
+        yielded[0] += 1
+        return (ret, average)
+
+    while remain[0]:
+        usbcontext.handleEventsTimeout(tv=0.1)
+        v = checkbuff()
+        if v:
+            yield v
+
+    for trans in trans_l:
+        trans.close()
+
+    # Flush any remaining captures in buffer
+    while True:
+        v = checkbuff()
+        if not v:
+            break
+        yield v
+
+    #postbuff = dev.bulkRead(0x82, 6, timeout=timeout_ms)
+    
+    print("packets: %u" % packets[0])
+    #hexdump(postbuff, "Next packet")
+
+    #assert len(postbuff) <= 6
+
+
+    print("")
+    print("")
+    print("")
 
 
 def decode(buff):
@@ -300,10 +418,14 @@ def open_dev(usbcontext=None, verbose=False):
             return udev.open()
     raise Exception("Failed to find a device")
 
+"""
+High level API object
+"""
+
 class Hamamatsu:
     def __init__(self, exp_ms=250, init=True):
-        usbcontext = usb1.USBContext()
-        self.dev = open_dev(usbcontext)
+        self.usbcontext = usb1.USBContext()
+        self.dev = open_dev(self.usbcontext)
         self.dev.claimInterface(0)
         self.dev.resetDevice()
         self.exp_ms = exp_ms
@@ -311,16 +433,15 @@ class Hamamatsu:
             ham_init(self.dev, exp_ms=self.exp_ms)
 
     def cap(self, cb, n=1):
-        buffs=[]
+        raws=[]
         print("Collecting")
-        for i in range(n):
-            print("img %u" % i)
-            buff = cap_img(self.dev, timeout_ms=(self.exp_ms + 500))
-            buffs.append(buff)
+        for rawi, (raw, avg) in enumerate(cap_imgn(self.dev, self.usbcontext, timeout_ms=(n * self.exp_ms + 500), n=n)):
+            print("img %u" % rawi)
+            raws.append(raw)
         print("Dispatching")
         for i in range(n):
             print("img %u" % i)
-            cb(i, buffs[i])
+            cb(i, raws[i])
         print("exp: %u" % get_exp(self.dev))
 
     def set_exp(self, ms):
