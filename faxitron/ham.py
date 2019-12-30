@@ -19,6 +19,7 @@ PIX_MAX = 0x3FFF
 
 imgsz = 1032 * 1032 * 2
 
+# 32770
 # Image start
 # Payload: length: image size + 2
 MSG_BEGIN = 0x8002
@@ -203,7 +204,9 @@ class CapImgN:
         sync = is_sync(buff)
 
         if sync == MSG_WTF:
-            print("WARNING: MSG_WTF")
+            print("WARNING: MSG_WTF. Discarding buffers")
+            self.state = MSG_END
+            self.rawbuff = None
             return
 
         # Wait for begin
@@ -277,13 +280,18 @@ class CapImgN:
         self.completions.append((counter, rawimg, average))
 
     def async_cb(self, trans):
-        self.handle_buff(trans.getBuffer())
-
-        # Beware of corruption w/ multiple URBs in END state
-        if self.running and (self.state == MSG_BEGIN or self.state == MSG_END and self.urb_remain == 1):
-            trans.submit()
-        else:
-            self.urb_remain -= 1
+        try:
+            if self.running:
+                self.handle_buff(trans.getBuffer())
+    
+            # Beware of corruption w/ multiple URBs in END state
+            if self.running and (self.state == MSG_BEGIN or self.state == MSG_END and self.urb_remain == 1):
+                trans.submit()
+            else:
+                self.urb_remain -= 1
+        except:
+            self.running = False
+            raise
 
     def alloc_urb(self, n):
         # reference only does 31, so stay with that
@@ -295,32 +303,35 @@ class CapImgN:
             self.urb_remain += 1
 
     def run(self, timeout_ms=2500):
-        tstart = time.time()
-
-        self.trans_l = []
-        self.urb_remain = 0
-
-        self.alloc_urb(1)
-
-        # Spend most of the time here
-        # URBs will be recycled until no longer needed
-        while self.urb_remain:
-            self.running = self.running and len(self.completions) < self.n
-            elapsed = int(time.time() - tstart) * 1000
-            if elapsed >= timeout_ms:
-                raise Exception("timeout after %s" % elapsed)
-            # Pre-maturely allocating seems to cause issue
-            if self.running and self.state == MSG_BEGIN:
-                self.alloc_urb(self.urb_max - self.urb_remain)
-
-            self.usbcontext.handleEventsTimeout(tv=0.1)
-
-        for trans in self.trans_l:
-            trans.close()
-        
-        # TODO: generate during process
-        for completion in self.completions:
-            yield completion
+        try:
+            tstart = time.time()
+    
+            self.trans_l = []
+            self.urb_remain = 0
+    
+            self.alloc_urb(1)
+    
+            # Spend most of the time here
+            # URBs will be recycled until no longer needed
+            while self.urb_remain:
+                self.running = self.running and len(self.completions) < self.n
+                elapsed = int(time.time() - tstart) * 1000
+                if elapsed >= timeout_ms:
+                    raise Exception("timeout after %s" % elapsed)
+                # Pre-maturely allocating seems to cause issue
+                if self.running and self.state == MSG_BEGIN:
+                    self.alloc_urb(self.urb_max - self.urb_remain)
+    
+                self.usbcontext.handleEventsTimeout(tv=0.1)
+    
+            for trans in self.trans_l:
+                trans.close()
+            
+            # TODO: generate during process
+            for completion in self.completions:
+                yield completion
+        finally:
+            self.running = False
 
 
 def cap_imgn(dev, usbcontext, n=1, timeout_ms=2500, verbose=1):
@@ -437,7 +448,11 @@ class Hamamatsu:
     def cap(self, cb, n=1):
         raws=[]
         print("Collecting")
-        for rawi, (counter, rawimg, _average) in enumerate(cap_imgn(self.dev, self.usbcontext, timeout_ms=(n * (self.exp_ms + 250) + 1000), n=n)):
+        """
+        timeout
+        Give allocation for one corrupt image...ocassionally happens at begin
+        """
+        for rawi, (counter, rawimg, _average) in enumerate(cap_imgn(self.dev, self.usbcontext, timeout_ms=((n + 1) * (self.exp_ms + 250) + 1000), n=n)):
             print("img %u" % rawi)
             raws.append(rawimg)
         print("Dispatching")
