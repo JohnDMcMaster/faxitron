@@ -18,10 +18,13 @@ imgsz = 1032 * 1032 * 2
 # TODO: consider upshifting to make raw easier to see
 PIX_MAX = 0x3FFF
 
-
-MSG_02 = 0x8002
+# start?
+MSG_BEGIN = 0x8002
 MSG_04 = 0x8004
 MSG_AE = 0x87AE
+
+# Including average after
+imgx_sz = imgsz + 2
 
 
 def validate_read(expected, actual, msg):
@@ -143,11 +146,20 @@ def ham_init(dev, exp_ms=500):
 
     validate_read(b"\x01", bulk1(dev, b"\x00\x00\x00\x0E\x00\x00\x00\x01\x01"), "packet 1398/1399")
 
-def cap_img_st(dev, timeout_ms=2500):
+def cap_img1(dev, usbcontext, timeout_ms=2500, verbose=1):
     def bulkRead(endpoint, length, timeout=None):
         return dev.bulkRead(endpoint, length, timeout=timeout_ms)
 
     '''
+    903 7 8004
+    905 7 87AE
+    983 253 8004
+    985 253 87AE
+    919 261 8002
+
+
+    another test
+
     Ret buff 1: 2
     Ret buff 132: 130
     Ret buff 133: 6
@@ -166,174 +178,95 @@ def cap_img_st(dev, timeout_ms=2500):
     '''
 
 
+    if verbose:
+        print("")
+        print("")
+        print("")
 
-
-
-    print("")
-    print("")
-    print("")
-    pack2 = bulkRead(0x82, 0x4000)
-    hexdump(pack2, "pack2")
-    assert len(pack2) == 2, len(pack2)
-    pack2u = unpack16(pack2)
-    """
-    Not exactly sure how this is suppose to work, but looks to be someting like this
-    """
-    # want_bytes = 2 * pack2u * 0x4000
-    # AssertionError: (640, 20971520, 2130048)
-    # hmm nope
-    # assert want_bytes == imgsz, (pack2u, want_bytes, imgsz)
-    assert pack2u == 0x280
-
-    buff = bytearray()
-    packets = 0
-    want_bytes = imgsz + 2
-    while True:
-        remain = want_bytes - len(buff)
-        if remain <= 0:
-            break
-        pack = bulkRead(0x82, min(0x4000, remain))
-        buff += pack
-        packets += 1
-
-    postbuff = bulkRead(0x82, 6)
-    
-    ret = buff[0:imgsz]
-    extra = buff[imgsz:]
-
-    print("packets: %u" % packets)
-    hexdump(buff[1032*0:1032*0+16], "First row")
-    hexdump(buff[1032*1:1032*1+16], "Second row")
-    hexdump(buff[1032*1031:1032*1031+16], "Last row")
-    hexdump(buff[-16:], "Last bytes")
-    hexdump(extra, "After image data")
-    hexdump(postbuff, "Next packet")
-
-    average = struct.unpack('<H', extra)[0]
-    print("Read (average?) value: %u / 0x%04X" % (average, average))
-    assert len(postbuff) <= 6
-
-
-    print("")
-    print("")
-    print("")
-
-    assert len(ret) == imgsz, (len(ret), len(buff))
-    return ret
-
-
-
-
-def cap_imgn(dev, usbcontext, n=1, timeout_ms=2500):
-
-    '''
-    Ret buff 1: 2
-    Ret buff 132: 130
-    Ret buff 133: 6
-
-    Ret buff 134: 2
-    Ret buff 265: 130
-    Ret buff 266: 6
-
-    Ret buff 267: 2
-    Ret buff 398: 130
-    Ret buff 399: 6
-
-
-    Others are 16384
-    131 * 16384 = 2146304
-    '''
-
-
-    # Including average after
-    imgx_sz = imgsz + 2
-
-    print("")
-    print("")
-    print("")
-
-    have_img = [0]
-    cur_bytes = [0]
-
-    buff = bytearray()
     rawbuff = bytearray()
+
+    sync_bytes = 0
+    tstart = time.time()
+    syncing = True
+    while syncing:
+        elapsed = int(time.time() - tstart) * 1000
+        if elapsed >= timeout_ms:
+            raise Exception("timeout after %s" % elapsed)
+
+        pack2 = bulkRead(0x82, 0x4000)
+        # is this assumption okay to make?
+        assert len(pack2) % 2 == 0, len(pack2)
+        while len(pack2):
+            # verbose and hexdump(pack2, "pack2")
+            #assert len(pack2) == 2, len(pack2)
+            pack2u = unpack16_le(pack2[0:2])
+            pack2 = pack2[2:]
+            sync_bytes += 2
+            """
+            Not exactly sure how this is suppose to work, but looks to be someting like this
+            """
+            # want_bytes = 2 * pack2u * 0x4000
+            # AssertionError: (640, 20971520, 2130048)
+            # hmm nope
+            # assert want_bytes == imgsz, (pack2u, want_bytes, imgsz)
+            if pack2u == MSG_BEGIN:
+                verbose and print("Sync after %u bytes" % sync_bytes)
+                # possibly will have leftover data?
+                rawbuff = pack2
+                syncing = False
+                break
+
+
     packets = [0]
-    want_bytes = (imgx_sz) * n
     def async_cb(trans):
         b = trans.getBuffer()
         
         rawbuff.extend(b)
-        if len(rawbuff) < want_bytes:
+        if len(rawbuff) < imgx_sz:
             trans.submit()
         else:
-            remain[0] -= 1
+            urb_remain[0] -= 1
         packets[0] += 1
 
     trans_l = []
-    remain = [0]
+    urb_remain = [0]
     # reference only does 31, so stay with that
     for _i in range(31):
         trans = dev.getTransfer()
         trans.setBulk(0x82, 0x4000, callback=async_cb, user_data=None, timeout=1000)
         trans.submit()
         trans_l.append(trans)
-        remain[0] += 1
+        urb_remain[0] += 1
 
-
-
-    yielded = [0]
-    def checkbuff():
-        buff = rawbuff
-
-        base = imgx_sz * yielded[0]
-        this = buff[base:base + imgx_sz]
-        if len(this) < imgx_sz:
-            return None
-
-        ret = this[0:imgsz]
-        extra = this[imgsz:]
-
-        hexdump(this[1032*0:1032*0+16], "First row")
-        hexdump(this[1032*1:1032*1+16], "Second row")
-        hexdump(this[1032*1031:1032*1031+16], "Last row")
-        hexdump(this[-16:], "Last bytes")
-        hexdump(extra, "After image data")
-    
-        average = struct.unpack('<H', extra)[0]
-        print("Read (average?) value: %u / 0x%04X" % (average, average))
-
-        assert len(ret) == imgsz, (len(ret), len(this))
-        yielded[0] += 1
-        return (ret, average)
-
-    while remain[0]:
+    while urb_remain[0]:
         usbcontext.handleEventsTimeout(tv=0.1)
-        v = checkbuff()
-        if v:
-            yield v
 
     for trans in trans_l:
         trans.close()
 
-    # Flush any remaining captures in buffer
-    while True:
-        v = checkbuff()
-        if not v:
-            break
-        yield v
+    buff = rawbuff[0:imgx_sz]
+    rawbuff = rawbuff[imgx_sz:]
+    ret = buff[0:imgsz]
+    footer = buff[imgsz:]
 
-    #postbuff = dev.bulkRead(0x82, 6, timeout=timeout_ms)
-    
-    print("packets: %u" % packets[0])
-    #hexdump(postbuff, "Next packet")
+    if verbose:
+        hexdump(buff[1032*0:1032*0+16], "First row")
+        hexdump(buff[1032*1:1032*1+16], "Second row")
+        hexdump(buff[1032*1031:1032*1031+16], "Last row")
+        hexdump(buff[-16:], "Last bytes")
+        hexdump(footer, "Image footer")
+        #hexdump(rawbuff, "Additional bytes")
+        print("Additional bytes: %u" % len(rawbuff))
 
-    #assert len(postbuff) <= 6
+    average = struct.unpack('<H', footer)[0]
+    verbose and print("Read (average?) value: %u / 0x%04X" % (average, average))
 
+    assert len(ret) == imgsz, (len(ret), imgsz)
+    return (ret, average)
 
-    print("")
-    print("")
-    print("")
-
+def cap_imgn(dev, usbcontext, n=1, timeout_ms=2500, verbose=1):
+    for _i in range(n):
+        yield cap_img1(dev, usbcontext, timeout_ms=timeout_ms, verbose=verbose)
 
 def decode(buff):
     '''Given bin return PIL image object'''
@@ -367,6 +300,9 @@ def unpack32(buff):
 
 def unpack16(buff):
     return struct.unpack('>H', buff)[0]
+
+def unpack16_le(buff):
+    return struct.unpack('<H', buff)[0]
 
 def get_exp(dev):
     return unpack32(bulk1(dev, b"\x00\x00\x00\x1F\x00\x00\x00\x00"))
