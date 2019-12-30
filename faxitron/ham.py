@@ -31,6 +31,10 @@ MSG_END = 0x8004
 MSG_WTF = 0x8005
 MSG_END_SZ = 6
 
+STATUS_OK = 3
+# observed around same time saw MSG_WTF
+STATUS_NOK = 7
+
 # Including average after
 imgx_sz = imgsz + 2
 
@@ -273,7 +277,10 @@ class CapImgN:
         assert opcode == MSG_END
         status, counter = struct.unpack('<HH', endbuff[2:])
         print("Status: %u, counter: %u" % (status, counter))
-        assert status == 3, status
+        if status == STATUS_NOK:
+            print("WARNING: bad status %u. Discarding frame" % status)
+            return
+        assert status == STATUS_OK, status
         
         assert len(rawimg) == imgsz, (len(rawimg), imgsz)
 
