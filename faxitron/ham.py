@@ -18,6 +18,12 @@ imgsz = 1032 * 1032 * 2
 # TODO: consider upshifting to make raw easier to see
 PIX_MAX = 0x3FFF
 
+
+MSG_02 = 0x8002
+MSG_04 = 0x8004
+MSG_AE = 0x87AE
+
+
 def validate_read(expected, actual, msg):
     expected = tobytes(expected)
     actual = tobytes(actual)
@@ -245,26 +251,19 @@ def cap_imgn(dev, usbcontext, n=1, timeout_ms=2500):
     print("")
     print("")
     print("")
-    pack2 = dev.bulkRead(0x82, 2)
-    hexdump(pack2, "pack2")
-    assert len(pack2) == 2, len(pack2)
-    pack2u = unpack16(pack2)
-    """
-    Not exactly sure how this is suppose to work, but looks to be someting like this
-    """
-    # want_bytes = 2 * pack2u * 0x4000
-    # AssertionError: (640, 20971520, 2130048)
-    # hmm nope
-    # assert want_bytes == imgsz, (pack2u, want_bytes, imgsz)
-    assert pack2u == 0x280
+
+    have_img = [0]
+    cur_bytes = [0]
 
     buff = bytearray()
+    rawbuff = bytearray()
     packets = [0]
     want_bytes = (imgx_sz) * n
     def async_cb(trans):
         b = trans.getBuffer()
-        buff.extend(b)
-        if len(buff) < want_bytes:
+        
+        rawbuff.extend(b)
+        if len(rawbuff) < want_bytes:
             trans.submit()
         else:
             remain[0] -= 1
@@ -284,6 +283,8 @@ def cap_imgn(dev, usbcontext, n=1, timeout_ms=2500):
 
     yielded = [0]
     def checkbuff():
+        buff = rawbuff
+
         base = imgx_sz * yielded[0]
         this = buff[base:base + imgx_sz]
         if len(this) < imgx_sz:
