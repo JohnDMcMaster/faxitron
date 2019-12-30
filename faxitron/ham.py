@@ -22,15 +22,17 @@ imgsz = 1032 * 1032 * 2
 # Image start
 # Payload: length: image size + 2
 MSG_BEGIN = 0x8002
-MSG_BEGIN_SZ = imgsz
+MSG_BEGIN_SZ = 2 + imgsz
 # Payload length: 2 bytes
 # ex: value 3
 MSG_END = 0x8004
-MSG_END_SZ = 4
+MSG_END_SZ = 6
 
 # Including average after
 imgx_sz = imgsz + 2
 
+def now():
+    return datetime.datetime.utcnow().isoformat()
 
 def validate_read(expected, actual, msg):
     expected = tobytes(expected)
@@ -151,7 +153,7 @@ def ham_init(dev, exp_ms=500):
 
     validate_read(b"\x01", bulk1(dev, b"\x00\x00\x00\x0E\x00\x00\x00\x01\x01"), "packet 1398/1399")
 
-def check_sync(buff, verbose=True, full=False):
+def check_sync(buff, verbose=True):
     syncpos = 0
     n = 0
     while len(buff):
@@ -162,160 +164,166 @@ def check_sync(buff, verbose=True, full=False):
             verbose and print("MSG 0x%04X @ 0x%04X" % (pack2u, syncpos))
             hexdump(buff[0:16], "Sync found")
             n += 1
-        # Within packet, sync always occurs as first word?
-        # Check whole buff on any found
-        elif (not full) and n == 0:
-            return n
         buff = buff[2:]
         syncpos += 2
+
     return n
 
-def cap_img1(dev, usbcontext, timeout_ms=2500, verbose=1, debug=1):
-    def bulkRead(endpoint, length, timeout=None):
-        return dev.bulkRead(endpoint, length, timeout=timeout_ms)
+def is_sync(buff, verbose=True):
+    pack2u = unpack16_le(buff[0:2])
+    if pack2u >= 0x4000:
+        verbose and print("%s MSG 0x%04X @ 0x%04X" % (now(), pack2u, 0))
+        hexdump(buff[0:16], "Sync found")
+        return pack2u
+    else:
+        return 0
 
-    '''
-    903 7 8004
-    905 7 87AE
-    983 253 8004
-    985 253 87AE
-    919 261 8002
+# TODO: make this thread capable to always take images and suck off as needed
+class CapImgN:
+    def __init__(self, dev, usbcontext, n=1, verbose=1):
+        self.dev = dev
+        self.usbcontext = usbcontext
+        self.verbose = verbose
+        self.n = n
+        self.state = MSG_END
+        self.urb_remain = 0
 
+        # len(self.rawbuff) < imgx_sz and len(self.messages) < 1
+        self.rawbuff = None
+        self.completions = []
+        self.urb_max = 31
 
-    another test
+        # for debugging
+        self.packets = 0
+        self.running = True
 
-    Ret buff 1: 2
-    Ret buff 132: 130
-    Ret buff 133: 6
-
-    Ret buff 134: 2
-    Ret buff 265: 130
-    Ret buff 266: 6
-
-    Ret buff 267: 2
-    Ret buff 398: 130
-    Ret buff 399: 6
-
-
-    Others are 16384
-    131 * 16384 = 2146304
-    '''
-
-
-    if verbose:
-        print("")
-        print("")
-        print("")
-
-    rawbuff = bytearray()
-
-    sync_bytes = 0
-    tstart = time.time()
-    syncing = True
-    while syncing:
-        elapsed = int(time.time() - tstart) * 1000
-        if elapsed >= timeout_ms:
-            raise Exception("timeout after %s" % elapsed)
-
-        pack2 = bulkRead(0x82, 0x4000)
-        # is this assumption okay to make?
-        assert len(pack2) % 2 == 0, len(pack2)
-        while len(pack2):
-            # verbose and hexdump(pack2, "pack2")
-            #assert len(pack2) == 2, len(pack2)
-            pack2u = unpack16_le(pack2[0:2])
-            pack2 = pack2[2:]
-            sync_bytes += 2
-            """
-            Not exactly sure how this is suppose to work, but looks to be someting like this
-            """
-            # want_bytes = 2 * pack2u * 0x4000
-            # AssertionError: (640, 20971520, 2130048)
-            # hmm nope
-            # assert want_bytes == imgsz, (pack2u, want_bytes, imgsz)
-            if pack2u == MSG_BEGIN:
-                verbose and print("Sync after %u bytes" % sync_bytes)
-                # possibly will have leftover data?
-                rawbuff = pack2
-                syncing = False
-                break
-
-
-    packets = [0]
-    messages = []
-    def async_cb(trans):
-        b = trans.getBuffer()
-        if check_sync(b[0:16]):
-            messages.append(b)
+    def handle_buff(self, buff):
+        # Wait for begin
+        if self.state == MSG_END:
+            sync = is_sync(buff)
+            # Can get garbage packets while waiting for begin
+            if not sync:
+                return
+            # Might be garbage in the buffer from aggressive read
+            if sync == MSG_END:
+                return
+            # note buffer has garbage. Might have 0's or other data
+            assert sync == MSG_BEGIN, ("0x%04X" % sync)
+            self.state = MSG_BEGIN
+            if self.verbose:
+                print("")
+                print("")
+                print("")
+            self.rawbuff = bytearray()
+            self.packets = 0
+        # Wait for end
+        elif self.state == MSG_BEGIN:
+            sync = is_sync(buff)
+            if sync:
+                assert sync == MSG_END, sync
+                self.process_end(buff)
+                self.rawbuff = None
+                self.state = MSG_END
+            else:
+                self.packets += 1
+                self.rawbuff.extend(buff)
         else:
-            rawbuff.extend(b)
+            assert 0, self.state
 
-        if len(rawbuff) < imgx_sz and len(messages) < 1:
+    def process_end(self, endbuff):
+        buff = self.rawbuff[0:imgx_sz]
+        self.rawbuff = self.rawbuff[imgx_sz:]
+        rawimg = buff[0:imgsz]
+        footer = buff[imgsz:]
+
+        if self.verbose:
+            hexdump(buff[1032*0:1032*0+16], "First row")
+            hexdump(buff[1032*1:1032*1+16], "Second row")
+            hexdump(buff[1032*1031:1032*1031+16], "Last row")
+            hexdump(buff[-16:], "Last bytes")
+            hexdump(footer, "Image footer")
+            #hexdump(rawbuff, "Additional bytes")
+            print("Additional bytes: %u" % len(self.rawbuff))
+            # very slow
+            # check_sync(self.rawbuff)
+    
+        average = struct.unpack('<H', footer)[0]
+        self.verbose and print("Read (average?) value: %u / 0x%04X" % (average, average))
+
+        """
+        04 80 03 00 AE 87
+        04 80 03 00 AD 87
+        Image counter seems to increment per capture set
+        One of the commands I'm sending during init probably increments it
+        """
+        opcode = unpack16_le(endbuff[0:2])
+        # Rest of the message is garbage in sensor buffer
+        endbuff = endbuff[0:MSG_END_SZ]
+        hexdump(endbuff, "EOS")
+        assert opcode == MSG_END
+        status, counter = struct.unpack('<HH', endbuff[2:])
+        print("Status: %u, counter: %u" % (status, counter))
+        assert status == 3, status
+        
+        assert len(rawimg) == imgsz, (len(rawimg), imgsz)
+
+        self.completions.append((counter, rawimg, average))
+
+    def async_cb(self, trans):
+        self.handle_buff(trans.getBuffer())
+
+        # Beware of corruption w/ multiple URBs in END state
+        if self.running and (self.state == MSG_BEGIN or self.state == MSG_END and self.urb_remain == 1):
             trans.submit()
         else:
-            urb_remain[0] -= 1
+            self.urb_remain -= 1
 
-        packets[0] += 1
+    def alloc_urb(self, n):
+        # reference only does 31, so stay with that
+        for _i in range(n):
+            trans = self.dev.getTransfer()
+            trans.setBulk(0x82, 0x4000, callback=self.async_cb, user_data=None, timeout=1000)
+            trans.submit()
+            self.trans_l.append(trans)
+            self.urb_remain += 1
 
-    trans_l = []
-    urb_remain = [0]
-    # reference only does 31, so stay with that
-    for _i in range(31):
-        trans = dev.getTransfer()
-        trans.setBulk(0x82, 0x4000, callback=async_cb, user_data=None, timeout=1000)
-        trans.submit()
-        trans_l.append(trans)
-        urb_remain[0] += 1
+    def run(self, timeout_ms=2500):
+        tstart = time.time()
 
-    while urb_remain[0]:
-        usbcontext.handleEventsTimeout(tv=0.1)
+        self.trans_l = []
+        self.urb_remain = 0
 
-    for trans in trans_l:
-        trans.close()
+        self.alloc_urb(1)
 
-    buff = rawbuff[0:imgx_sz]
-    rawbuff = rawbuff[imgx_sz:]
-    ret = buff[0:imgsz]
-    footer = buff[imgsz:]
+        # Spend most of the time here
+        # URBs will be recycled until no longer needed
+        while self.urb_remain:
+            self.running = self.running and len(self.completions) < self.n
+            elapsed = int(time.time() - tstart) * 1000
+            if elapsed >= timeout_ms:
+                raise Exception("timeout after %s" % elapsed)
+            # Pre-maturely allocating seems to cause issue
+            if self.running and self.state == MSG_BEGIN:
+                self.alloc_urb(self.urb_max - self.urb_remain)
 
-    if verbose:
-        hexdump(buff[1032*0:1032*0+16], "First row")
-        hexdump(buff[1032*1:1032*1+16], "Second row")
-        hexdump(buff[1032*1031:1032*1031+16], "Last row")
-        hexdump(buff[-16:], "Last bytes")
-        hexdump(footer, "Image footer")
-        #hexdump(rawbuff, "Additional bytes")
-        print("Additional bytes: %u" % len(rawbuff))
-        # very slow
-        check_sync(rawbuff)
+            self.usbcontext.handleEventsTimeout(tv=0.1)
 
-    average = struct.unpack('<H', footer)[0]
-    verbose and print("Read (average?) value: %u / 0x%04X" % (average, average))
+        for trans in self.trans_l:
+            trans.close()
+        
+        # TODO: generate during process
+        for completion in self.completions:
+            yield completion
 
-    assert len(messages) == 1
-    message = messages[0]
-    """
-    04 80 03 00 AE 87
-    04 80 03 00 AD 87
-    Image counter seems to increment per capture set
-    One of the commands I'm sending during init probably increments it
-    """
-    opcode = unpack16_le(message[0:2])
-    # Rest of the message is garbage in sensor buffer
-    message = message[0:MSG_END_SZ+2]
-    hexdump(message, "EOS")
-    message = message[2:]
-    assert opcode == MSG_END
-    status, counter = struct.unpack('<HH', message)
-    print("Status: %u, counter: %u" % (status, counter))
-    assert status == 3, status
-    
-    assert len(ret) == imgsz, (len(ret), imgsz)
-    return (ret, average)
 
 def cap_imgn(dev, usbcontext, n=1, timeout_ms=2500, verbose=1):
-    for _i in range(n):
-        yield cap_img1(dev, usbcontext, timeout_ms=timeout_ms, verbose=verbose)
+    cap = CapImgN(dev, usbcontext, n=n, verbose=verbose)
+    try:
+        for v in cap.run(timeout_ms=timeout_ms):
+            yield v
+    finally:
+        cap.running = False
+
 
 def decode(buff):
     '''Given bin return PIL image object'''
@@ -422,9 +430,9 @@ class Hamamatsu:
     def cap(self, cb, n=1):
         raws=[]
         print("Collecting")
-        for rawi, (raw, avg) in enumerate(cap_imgn(self.dev, self.usbcontext, timeout_ms=(n * self.exp_ms + 500), n=n)):
+        for rawi, (counter, rawimg, _average) in enumerate(cap_imgn(self.dev, self.usbcontext, timeout_ms=(n * self.exp_ms + 5000), n=n)):
             print("img %u" % rawi)
-            raws.append(raw)
+            raws.append(rawimg)
         print("Dispatching")
         for i in range(n):
             print("img %u" % i)
