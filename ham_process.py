@@ -172,7 +172,7 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
 def main():
     import argparse 
     
-    parser = argparse.ArgumentParser(description='Replay captured USB packets')
+    parser = argparse.ArgumentParser(description='Apply image correction')
     #parser.add_argument('--images', type=int, default=0, help='Only take first n images, for debugging')
     parser.add_argument('--cal-dir', default='cal', help='')
     parser.add_argument('--hist-eq-roi', default=None, help='hist eq x1,y1,x2,y2')
