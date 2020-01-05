@@ -263,15 +263,15 @@ def bulk_write(pw):
     elif opcode == 0x20:
         assert prdata == b"\x01"
         exp = unpack32ub(payload)
-        line("set_exp_setup(dev, %u)" % exp)
+        line("set_exp(dev, %u)" % exp)
         # XXX: there is a verify after this we should ideally eat
     elif opcode == 0x0E:
         assert payload == b"\x01"
         assert prdata == b"\x01"
-        line("cap_begin(dev)")
+        line("force_trig(dev)")
     else:
         pktl, pkth = pw['packn']
-        assert_msg = '"packet %u/%u"' % (pktl, pkth)
+        assert_msg = '"packet %s/%s"' % (pktl, pkth)
         response = bin2hexarg(prdata)
     
         # line('validate_read(%s, bulk1(dev, %s), %s)' % (response, out, desc))
@@ -320,22 +320,27 @@ def dump(fin, source_str, save=False):
         elif p['type'] == 'bulkRead':
             # print("# WARNING: dropping bulkRead")
             endpoint = p['endp']
-            if endpoint == 0x82:
-                buff = binascii.unhexlify(p["data"])
-                sync_word = ham.is_sync(buff, verbose=False)
-                if sync_word:
-                    if sync_word == ham.MSG_BEGIN:
-                        im_bytes = 0
-                    elif sync_word == ham.MSG_END:
-                        comment("Final bytes: %u" % im_bytes)
-                        im_bytes = None
-                    sync_str = ham.sync2str(sync_word)
-                else:
-                    sync_str = "NONE"
-                    im_bytes += len(buff)
-                comment("bulkRead(0x82): req %u, got %u bytes w/ sync %s" % (p['len'], len(buff), sync_str))
+            if p["data"] is None:
+                buff = None
             else:
-                comment("bulkRead(0x%02X): req %u, got %u bytes w/ sync %s" % (endpoint, p['len'], len(buff), sync_str))
+                buff = binascii.unhexlify(p["data"])
+            assert endpoint == 0x82
+            sync_word = ham.is_sync(buff, verbose=False)
+            sync_str = "NONE"
+            if sync_word:
+                if sync_word == ham.MSG_BEGIN:
+                    im_bytes = 0
+                elif sync_word == ham.MSG_END:
+                    comment("Final bytes: %u" % im_bytes)
+                    comment("MSG_END: %s" % binascii.hexlify(buff))
+                    im_bytes = None
+                sync_str = ham.sync2str(sync_word)
+            elif im_bytes is None:
+                comment("WARNING: data without image")
+                im_bytes = len(buff)
+            else:
+                im_bytes += len(buff)
+            comment("bulkRead(0x%02X): req %u, got %u bytes w/ sync %s, %s bytes total" % (endpoint, p['len'], len(buff), sync_str, im_bytes))
         else:
             raise Exception("%u unknown type: %s" % (pi, p['type']))
         if not is_comment:
@@ -361,7 +366,7 @@ if __name__ == "__main__":
     source_str = args.fin
     if args.fin.find('.cap') >= 0 or args.fin.find('.pcapng') >= 0 or args.fin.find('.pcap') >= 0:
         fin = '/tmp/scrape.json'
-        cmd = 'usbrply --packet-numbers --no-setup --device-hi %s -j %s >%s' % (args.usbrply, args.fin, fin)
+        cmd = 'usbrply --no-packet-numbers --no-setup --device-hi %s -j %s >%s' % (args.usbrply, args.fin, fin)
         try:
             subprocess.check_call(cmd, shell=True)
         except:

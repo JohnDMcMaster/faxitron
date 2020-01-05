@@ -8,6 +8,7 @@ from faxitron.util import hexdump, add_bool_arg, tobytes, tostr
 from PIL import Image
 import os
 import struct
+import sys
 
 HAM_VID = 0x0661
 # C9730DK-11
@@ -21,19 +22,36 @@ MSG_ABORTED = 0x8001
 # 32770
 # Image start
 # Payload: length: image size + 2
+# XXX: DC12 has 4 byte payload? Double check this is correct
+# DC12:
+# 0040   04 80 0e 00 d3 d7
 MSG_BEGIN = 0x8002
 # Payload length: 2 bytes
 # ex: value 3
 MSG_END = 0x8004
 """
 Getting this means that a new frame will come
+I think it represents a real time failure
+
+from official capture
+"Lost frame"
+# bulkRead(0x82): req 16384, got 1026 bytes w/ sync NONE, 1573890 bytes total
+# bulkRead(0x82): req 3584, got 2 bytes w/ sync MSG_ERROR, 1573890 bytes total
+# bulkRead(0x82): req 16384, got 2 bytes w/ sync MSG_BEGIN, 0 bytes total
+# bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE, 16384 bytes total
+...
+# bulkRead(0x82): req 3584, got 3074 bytes w/ sync NONE, 11082242 bytes total
+# Final bytes: 11082242
+# bulkRead(0x82): req 512, got 6 bytes w/ sync MSG_END, None bytes total
+# bulkRead(0x82): req 512, got 2 bytes w/ sync MSG_BEGIN, 0 bytes total
 """
-MSG_WTF = 0x8005
+MSG_ERROR = 0x8005
 MSG_END_SZ = 6
 
-STATUS_OK = 3
-# observed around same time saw MSG_WTF
-STATUS_NOK = 7
+STATUS_OK_DC5 = 0x03
+# observed around same time saw MSG_ERROR
+STATUS_NOK = 0x07
+STATUS_OK_DC12 = 0x0E
 
 def unpack32ub(buff):
     return struct.unpack('>I', buff)[0]
@@ -85,8 +103,8 @@ def validate_cmd1(dev, opcode, expected, payload=b"", msg=""):
     #assert expect == got, (msg, expect, got)
     validate_read(expected, buff, msg)
 
-def cap_begin(dev):
-    validate_cmd1(dev, 0x0E, "\x01", payload=b"\x01", msg="cap_begin")
+def force_trig(dev):
+    validate_cmd1(dev, 0x0E, "\x01", payload=b"\x01", msg="force_trig")
 
 def abort_stream(dev):
     # Special: seems to be the only thing that doesn't get a reply?
@@ -198,13 +216,13 @@ def ham_init(dev, exp_ms=500):
     validate_cmd1(dev, 0x21, b"\x40\x34\x00\x00\x00\x00\x00\x00", msg="packet 301/302", payload=b"\x00\x00\x00\x01")
     validate_cmd1(dev, 0x21, b"\x3F\x50\x62\x4D\xD2\xF1\xA9\xFC", msg="packet 305/306", payload=b"\x00\x00\x00\x02")
     validate_cmd1(dev, 0x21, b"\x00\x00\x00\x00\x00\x00\x00\x00", msg="packet 309/310", payload=b"\x00\x00\x00\x03")
-    set_exp_setup(dev, 2000)
+    set_exp(dev, 2000)
     # 2000 ms
     exposure = get_exp(dev)
-    set_exp_setup(dev, 250)
+    set_exp(dev, 1000)
     # 250 ms
     exposure = get_exp(dev)
-    set_exp_setup(dev, 250)
+    set_exp(dev, 1000)
     # 250 ms
     exposure = get_exp(dev)
     trig_int(dev)
@@ -212,7 +230,7 @@ def ham_init(dev, exp_ms=500):
     exposure = get_exp(dev)
     validate_cmd1(dev, 0x2E, b"\x00", msg="packet 345/346", payload=b"\x00\x00\x00\x12")
     validate_cmd1(dev, 0x2E, b"\x00", msg="packet 349/350", payload=b"\x00\x00\x00\x02")
-    set_exp_setup(dev, 250)
+    set_exp(dev, 1000)
     # 250 ms
     exposure = get_exp(dev)
     trig_int(dev)
@@ -226,8 +244,8 @@ def check_sync(buff, verbose=True):
         #    print(len(buff))
         pack2u = unpack16_le(buff[0:2])
         if pack2u >= 0x4000:
-            verbose and print("MSG 0x%04X @ 0x%04X" % (pack2u, syncpos))
-            hexdump(buff[0:16], "Sync found")
+            verbose and print("MSG 0x%04X @ 0x%04X, %u bytes => %s" % (pack2u, syncpos, len(buff), binascii.hexlify(buff[0:16])))
+            #hexdump(buff[0:16], "Sync found")
             n += 1
         buff = buff[2:]
         syncpos += 2
@@ -237,11 +255,13 @@ def check_sync(buff, verbose=True):
 def is_sync(buff, verbose=True):
     if len(buff) == 0:
         return 0
-    pack2u = unpack16_le(buff[0:2])
-    if pack2u >= 0x4000:
-        verbose and print("%s MSG 0x%04X @ 0x%04X" % (now(), pack2u, 0))
-        verbose and hexdump(buff[0:16], "Sync found")
-        return pack2u
+    pix0 = unpack16ul(buff[0:2])
+    # proper check is probably & 0x8000
+    # but anything in this range is not valid pixel
+    if pix0 >= 0x4000:
+        verbose and print("MSG 0x%04X (%s), %u bytes => %s" % (pix0, sync2str(pix0), len(buff), binascii.hexlify(buff[0:16])))
+        #hexdump(buff[0:16], "Sync found")
+        return pix0
     else:
         return 0
 
@@ -250,13 +270,13 @@ def sync2str(word):
         MSG_ABORTED: "MSG_ABORTED",
         MSG_BEGIN: "MSG_BEGIN",
         MSG_END: "MSG_END",
+        MSG_ERROR: "MSG_ERROR",
         }.get(word, "MSG_%04X" % word)
 
 # TODO: make this thread capable to always take images and suck off as needed
 #STATE_BEGIN = 'BEGIN'
 #STATE_END = 'END'
 class CapImgN:
-
     def __init__(self, dev, usbcontext, width, height, depth=2, n=1, verbose=1):
         self.dev = dev
         self.usbcontext = usbcontext
@@ -271,6 +291,7 @@ class CapImgN:
         self.n = n
         #self.state = STATE_END
         self.urb_remain = 0
+        self.lost_frames = 0
         """
         33 outstanding URBs at any time?
         This is the repeating sequence (DC5, DC12)
@@ -325,16 +346,19 @@ class CapImgN:
         self.MSG_BEGIN_SZ = 2 + self.imgsz
         # Including average after
         self.imgx_sz = self.imgsz + 2
+        self.lens = []
 
     def process_end(self, endbuff):
         self.verbose and print("rawbuff: %u bytes" % len(self.rawbuff))
         buff = self.rawbuff[0:self.imgx_sz]
         self.verbose and print("buff: %u bytes" % len(buff))
-        self.rawbuff = self.rawbuff[self.imgx_sz:]
         rawimg = buff[0:self.imgsz]
         self.verbose and print("rawimg: %u bytes" % len(rawimg))
         footer = buff[self.imgsz:]
         self.verbose and print("footer: %u bytes" % len(footer))
+
+        for i, l in enumerate(self.lens):
+            print("%u %u" % (i, l))
 
         if self.verbose:
             hexdump(buff[self.widthd*0:self.widthd*0+16], "First row")
@@ -344,7 +368,7 @@ class CapImgN:
             hexdump(footer, "Image footer")
             #hexdump(rawbuff, "Additional bytes")
             print("Additional bytes: %u" % len(self.rawbuff))
-            assert len(self.rawbuff) == 0, "Overshot by %u bytes" % (len(self.rawbuff) - self.imgx_sz,)
+            assert len(self.rawbuff) == self.imgx_sz, "%u bytes, overshot by %u bytes" % (len(self.rawbuff), len(self.rawbuff) - self.imgx_sz)
             # very slow
             # check_sync(self.rawbuff)
     
@@ -364,10 +388,9 @@ class CapImgN:
         assert opcode == MSG_END, opcode
         status, counter = struct.unpack('<HH', endbuff[2:])
         print("Status: %u, counter: %u" % (status, counter))
-        if status == STATUS_NOK:
+        if not status in (STATUS_OK_DC5, STATUS_OK_DC12):
             print("WARNING: bad status %u. Discarding frame" % status)
             return
-        assert status == STATUS_OK, status
         
         assert len(rawimg) == self.imgsz, (len(rawimg), self.imgsz)
 
@@ -380,19 +403,28 @@ class CapImgN:
             if not self.running:
                 return
 
-            buff = trans.getBuffer()
+            # f you API. Why would anyone want uninitialized memory?
+            buff = trans.getBuffer()[:trans.getActualLength()]
             sync = is_sync(buff)
-            if sync == MSG_BEGIN:
-                self.rawbuff = bytearray()
+            if sync:
+                net_bytes = 0 if self.rawbuff is None else len(self.rawbuff)
+                # Don't warn after recovering from error
+                if not (self.rawbuff is None and sync == MSG_BEGIN):
+                    print("WARNING: expected data, got %s, %u packets w/ %u frame bytes" % (sync2str(sync), self.packets, net_bytes))
                 trans.submit()
-            elif sync == MSG_WTF:
-                print("WARNING: MSG_WTF")
-                trans.submit()
+                self.urb_remain += 1
                 self.rawbuff = None
             else:
+                # In particular this can happen for a bit after MSG_ERROR
+                if self.rawbuff is None:
+                    trans.submit()
+                    self.urb_remain += 1
+                    return
+
                 assert len(self.rawbuff) < self.imgx_sz, len(self.rawbuff)
                 assert not sync, ("0x%04X" % sync, len(self.rawbuff))
-    
+                self.lens.append(len(buff))
+
                 self.rawbuff.extend(buff)
         
                 est_submit = len(self.rawbuff) + self.urb_size * self.urb_remain
@@ -406,23 +438,32 @@ class CapImgN:
             self.running = False
             raise
 
-    def alloc_urb(self, n):
+    def alloc_urb(self):
         # reference only does 31, so stay with that
-        for urbi in range(n):
+        for urbi in range(33):
             trans = self.dev.getTransfer()
-            trans.setBulk(0x82, self.urb_size, callback=self.async_cb, user_data=None, timeout=2500)
+            if 1:
+                if urbi == 1:
+                    urb_size = 3584
+                elif urbi == 32:
+                    urb_size = 12800
+                else:
+                    urb_size = self.urb_size
+            else:
+                urb_size = self.urb_size
+            trans.setBulk(0x82, urb_size, callback=self.async_cb, user_data=None, timeout=2500)
             trans.submit()
             self.trans_l.append(trans)
             self.urb_remain += 1
 
     def run_cap(self):
-        self.rawbuff = None
+        self.rawbuff = bytearray()
         self.packets = 0
 
         self.trans_l = []
         self.urb_remain = 0
 
-        self.alloc_urb(31)
+        self.alloc_urb()
 
         # Spend most of the time here
         # URBs will be recycled until no longer needed
@@ -439,39 +480,59 @@ class CapImgN:
         print("%u packets, %u bytes" % (self.packets, len(self.rawbuff)))
         assert self.running
 
+    """
+    Timing example
+    23.218949:23.218971: submit begin request (bulkWrite 1)
+    23.220151:24.048424: wait begin response (bulkRead 3)
+        dt: 0.828273
+    24.050377:25.050133: wait begin message (bulkRead 2)
+        dt: 0.999756
+    25.066560
+        33 URBs submitted
+
+    Is there a chance I'm going too quick between init and cap?
+    """
     # TODO: reconsider error handling on bad messages
     def run(self, timeout_ms=2500):
         self.timeout_ms = timeout_ms
         try:
             self.tstart = time.time()
             for imgi in range(self.n):
-                """
-                buff = self.dev.bulkRead(0x82, 512)
-                sync = is_sync(buff)
-                assert sync == MSG_BEGIN, sync
-                # still get 0x8005
-                # time.sleep(2)
-                """
-
-                print("run_cap() begin")
-                self.run_cap()
-                print("run_cap() end")
-
-                buff = self.dev.bulkRead(0x82, 512)
-                sync = is_sync(buff)
-                assert sync == MSG_END, sync
-
-                yield self.process_end(buff)
-                self.rawbuff = None
+                while True:
+                    self.rawbuff = None
+                    self.packets = None
+                    self.lens = []
+                    buff = self.dev.bulkRead(0x82, 512)
+                    sync = is_sync(buff)
+                    if sync != MSG_BEGIN:
+                        print("WARNING: expected BEGIN, got sync %s" % sync2str(sync))
+                        continue
+                    
+                    # time.slesyep(0.016)
+    
+                    print("run_cap() begin")
+                    self.run_cap()
+                    print("run_cap() end")
+    
+                    buff = self.dev.bulkRead(0x82, 512)
+                    sync = is_sync(buff)
+                    if sync != MSG_END:
+                        print("WARNING: expected END, got sync %s" % sync2str(sync))
+                        continue
+    
+                    yield self.process_end(buff)
+                    self.rawbuff = None
+                    break
 
 
             buff = self.dev.bulkRead(0x82, 512)
             sync = is_sync(buff)
-            assert sync == MSG_BEGIN, sync
+            assert sync == MSG_BEGIN, sync2str(sync)
 
             abort_stream(self.dev)
 
-            for i in range(3):
+            tabort = time.time()
+            while time.time() - tabort < 1.0:
                 buff = self.dev.bulkRead(0x82, 512)
                 if is_sync(buff) == MSG_ABORTED:
                     break
@@ -496,7 +557,7 @@ def decode(buff, width, height, depth=2):
     assert len(buff) == width * height * depth
 
     # no need to reallocate each loop
-    img = Image.new("I", (height, width), "White")
+    img = Image.new("I", (width, height), "White")
 
     for y in range(height):
         line0 = buff[y * width * depth:(y + 1) * width * depth]
@@ -524,33 +585,18 @@ def get_exp(dev):
 
     return unpack32(cmd1(dev, 0x1F))
 
-def set_exp_setup(dev, exp_ms):
-    def pack32(n):
-        return struct.pack('>I', n)
-
-    validate_cmd1(dev, 0x20, "\x01", payload=pack32(exp_ms), msg="set_exp_setup")
-    assert get_exp(dev) == exp_ms
-
-def set_exp(dev, exp_ms, width, height):
+def set_exp(dev, exp_ms):
     # Determined experimentally
     # less than 30 verify fails
     # setting above 2000 seems to silently fail and peg at 2000
     # 3000 is slightly brighter than 2000 though, so the actual limit might be 2048 or something of that sort
     assert 30 <= exp_ms <= 2000
 
-    set_exp_setup(dev, exp_ms)
-   
-    """
-    set_roi_wh(dev, width, height)
-    get_roi_wh(dev)
-    set_roi_wh(dev, width, height)
-    get_roi_wh(dev)
-    get_roi_wh(dev)
+    def pack32(n):
+        return struct.pack('>I', n)
 
-    # adding this seems to actually confirm the exposure
-    # tried removing and old is in place without it
-    cap_begin(dev)
-    """
+    validate_cmd1(dev, 0x20, "\x01", payload=pack32(exp_ms), msg="set_exp")
+    #assert get_exp(dev) == exp_ms
 
 
 def open_dev(usbcontext=None, verbose=False):
@@ -579,7 +625,7 @@ High level API object
 """
 
 class Hamamatsu:
-    def __init__(self, exp_ms=250, init=True):
+    def __init__(self, exp_ms=1000, init=True):
         self.usbcontext = usb1.USBContext()
         self.dev = open_dev(self.usbcontext)
         self.dev.claimInterface(0)
@@ -595,6 +641,8 @@ class Hamamatsu:
         self.debug = 0
 
     def cap(self, cb, n=1):
+        time.sleep(3)
+
         # Generated from ./dc5/2019-12-26_02_init.pcapng
         dev = self.dev
         set_roi_wh(dev, self.width, self.height)
@@ -605,7 +653,7 @@ class Hamamatsu:
         width, height = get_roi_wh(dev)
         # 0x0940, 0x0924
         width, height = get_roi_wh(dev)
-        cap_begin(dev)
+        force_trig(dev)
 
 
 
@@ -631,7 +679,7 @@ class Hamamatsu:
 
     def set_exp(self, ms):
         self.exp_ms = ms
-        set_exp(self.dev, ms, width=self.width, height=self.height)
+        set_exp(self.dev, ms)
 
     def get_vendor(self):
         return get_info1(self.dev)[0]
@@ -646,4 +694,4 @@ class Hamamatsu:
         return get_info1(self.dev)[3]
 
     def decode(self, buff):
-        decode(buff, self.width, self.height)
+        return decode(buff, self.width, self.height)

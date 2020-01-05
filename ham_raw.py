@@ -34,11 +34,11 @@ def main():
             open(binfn, 'w').write(buff)
         if args.png:
             print("Saving %s" % pngfn)
-            ham.decode(buff).save(pngfn)
+            h.decode(buff).save(pngfn)
 
     h = ham.Hamamatsu()
     mkdir_p(outdir)
-    h.set_exp(args.exp)
+    #h.set_exp(args.exp)
 
     print('')
     print('')
