@@ -15,7 +15,7 @@ import struct
 '''
 def str2hex(buff, prefix='', terse=True):
     if len(buff) == 0:
-        return '""'
+        return 'b""'
     buff = bytearray(buff)
     ret = ''
     if terse and len(buff) > 16:
@@ -25,7 +25,7 @@ def str2hex(buff, prefix='', terse=True):
             if i != 0:
                 ret += '" \\\n'
             if len(buff) <= 16:
-                ret += '"'
+                ret += 'b"'
             if not terse or len(buff) > 16:
                 ret += '%s"' % prefix
             
@@ -308,6 +308,7 @@ def dump(fin, source_str, save=False):
             
         return pi + 1
 
+    im_bytes = None
     while pi < len(ps):
         is_comment = False
         p = ps[pi]
@@ -323,9 +324,15 @@ def dump(fin, source_str, save=False):
                 buff = binascii.unhexlify(p["data"])
                 sync_word = ham.is_sync(buff, verbose=False)
                 if sync_word:
+                    if sync_word == ham.MSG_BEGIN:
+                        im_bytes = 0
+                    elif sync_word == ham.MSG_END:
+                        comment("Final bytes: %u" % im_bytes)
+                        im_bytes = None
                     sync_str = ham.sync2str(sync_word)
                 else:
                     sync_str = "NONE"
+                    im_bytes += len(buff)
                 comment("bulkRead(0x82): req %u, got %u bytes w/ sync %s" % (p['len'], len(buff), sync_str))
             else:
                 comment("bulkRead(0x%02X): req %u, got %u bytes w/ sync %s" % (endpoint, p['len'], len(buff), sync_str))

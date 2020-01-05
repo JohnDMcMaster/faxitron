@@ -25,7 +25,9 @@ MSG_BEGIN = 0x8002
 # Payload length: 2 bytes
 # ex: value 3
 MSG_END = 0x8004
-# Observed by Alex
+"""
+Getting this means that a new frame will come
+"""
 MSG_WTF = 0x8005
 MSG_END_SZ = 6
 
@@ -48,7 +50,7 @@ def unpack16ul(buff):
 def now():
     return datetime.datetime.utcnow().isoformat()
 
-def validate_read(expected, actual, msg):
+def validate_read(expected, actual, msg=""):
     expected = tobytes(expected)
     actual = tobytes(actual)
     if expected != actual:
@@ -73,7 +75,7 @@ def bulk1(dev, cmd, read=True):
         return bulkRead(0x83, 0x0200)
 
 def cmd1(dev, opcode, payload=b"", read=True):
-    buff = struct.pack(">II", (opcode, len(payload)))
+    buff = struct.pack(">II", opcode, len(payload))
     return bulk1(dev, buff + payload, read=read)
 
 
@@ -144,12 +146,14 @@ def get_info2(dev):
     return parse_info2(buff)
 
 def set_roi_wh(dev, width, height):
-    validate_read(b"\x01", cmd1(dev, 9, b"\x00\x01\x00\x00\x00\x00" + struct.pack('<HH', width, height)))
+    payload = b"\x00\x01\x00\x00\x00\x00" + struct.pack('>HH', width, height)
+    validate_read(b"\x01", cmd1(dev, 9, payload=payload), msg="set_roi_wh")
 
 def get_roi_wh(dev):
     # DC5
     # validate_read(b"\x00\x00\x04\x08\x00\x00\x04\x08", 
-    return struct.unpack('>II', cmd1(dev, 4))
+    buff = cmd1(dev, 4)
+    return struct.unpack('>II', buff)
 
 
 def ham_init(dev, exp_ms=500):
@@ -165,34 +169,35 @@ def ham_init(dev, exp_ms=500):
     # HAMAMATSU, C9730DK-11, 1.21, 5403219
     vendor, model, ver, sn = get_info1(dev)
     # 0x0408, 0x0408
-    width, height = get_info2(dev)
-    validate_cmd1(dev, 0x24, "\x00\x00\x00\x06\x00\x00\x00\x20\x00\x00\x00\x03", msg="packet 221/222")
-    validate_cmd1(dev, 0x2A, "\x00", msg="packet 225/226")
-    validate_cmd1(dev, 0x39, "\x00", msg="packet 229/230")
-    validate_cmd1(dev, 0x3A, "\x00", msg="packet 233/234")
-    validate_cmd1(dev, 0x3B, "\x00", msg="packet 237/238")
-    validate_cmd1(dev, 0x3C, "\x00", msg="packet 241/242")
-    validate_cmd1(dev, 0x3D, "\x00", msg="packet 245/246")
-    validate_cmd1(dev, 0x4A, "\x00", msg="packet 249/250")
-    validate_cmd1(dev, 0x4F, "\x00", msg="packet 253/254")
-    validate_cmd1(dev, 0x23, "\x01", msg="packet 257/258")
-    validate_cmd1(dev, 0x29, "\x00", msg="packet 261/262")
+    width_ret, height_ret = get_info2(dev)
+    validate_cmd1(dev, 0x24, b"\x00\x00\x00\x06\x00\x00\x00\x20\x00\x00\x00\x03", msg="packet 221/222")
+    validate_cmd1(dev, 0x2A, b"\x00", msg="packet 225/226")
+    validate_cmd1(dev, 0x39, b"\x00", msg="packet 229/230")
+    validate_cmd1(dev, 0x3A, b"\x00", msg="packet 233/234")
+    validate_cmd1(dev, 0x3B, b"\x00", msg="packet 237/238")
+    validate_cmd1(dev, 0x3C, b"\x00", msg="packet 241/242")
+    validate_cmd1(dev, 0x3D, b"\x00", msg="packet 245/246")
+    validate_cmd1(dev, 0x4A, b"\x00", msg="packet 249/250")
+    validate_cmd1(dev, 0x4F, b"\x00", msg="packet 253/254")
+    validate_cmd1(dev, 0x23, b"\x01", msg="packet 257/258")
+    validate_cmd1(dev, 0x29, b"\x00", msg="packet 261/262")
     # HAMAMATSU, C9730DK-11, 1.21, 5403219
     vendor, model, ver, sn = get_info1(dev)
     # HAMAMATSU, C9730DK-11, 1.21, 5403219
     vendor, model, ver, sn = get_info1(dev)
     # HAMAMATSU, C9730DK-11, 1.21, 5403219
     vendor, model, ver, sn = get_info1(dev)
-    set_roi_wh(dev, width, height)
+    set_roi_wh(dev, width_ret, height_ret)
     # 0x0408, 0x0408
     width, height = get_roi_wh(dev)
-    validate_cmd1(dev, 0x2E, "\x00", msg="packet 285/286", payload="\x00\x00\x00\x02")
-    validate_cmd1(dev, 0x2E, "\x00", msg="packet 289/290", payload="\x00\x00\x00\x12")
-    validate_cmd1(dev, 0x2E, "\x00", msg="packet 293/294", payload="\x00\x00\x00\x18")
-    validate_cmd1(dev, 0x21, "\x3F\x9E\xB8\x51\xEB\x85\x1E\xB8", msg="packet 297/298", payload="\x00\x00\x00\x00")
-    validate_cmd1(dev, 0x21, "\x40\x34\x00\x00\x00\x00\x00\x00", msg="packet 301/302", payload="\x00\x00\x00\x01")
-    validate_cmd1(dev, 0x21, "\x3F\x50\x62\x4D\xD2\xF1\xA9\xFC", msg="packet 305/306", payload="\x00\x00\x00\x02")
-    validate_cmd1(dev, 0x21, "\x00\x00\x00\x00\x00\x00\x00\x00", msg="packet 309/310", payload="\x00\x00\x00\x03")
+    assert (width, height) == (width_ret, height_ret), (width, height, width_ret, height_ret)
+    validate_cmd1(dev, 0x2E, b"\x00", msg="packet 285/286", payload=b"\x00\x00\x00\x02")
+    validate_cmd1(dev, 0x2E, b"\x00", msg="packet 289/290", payload=b"\x00\x00\x00\x12")
+    validate_cmd1(dev, 0x2E, b"\x00", msg="packet 293/294", payload=b"\x00\x00\x00\x18")
+    validate_cmd1(dev, 0x21, b"\x3F\x9E\xB8\x51\xEB\x85\x1E\xB8", msg="packet 297/298", payload=b"\x00\x00\x00\x00")
+    validate_cmd1(dev, 0x21, b"\x40\x34\x00\x00\x00\x00\x00\x00", msg="packet 301/302", payload=b"\x00\x00\x00\x01")
+    validate_cmd1(dev, 0x21, b"\x3F\x50\x62\x4D\xD2\xF1\xA9\xFC", msg="packet 305/306", payload=b"\x00\x00\x00\x02")
+    validate_cmd1(dev, 0x21, b"\x00\x00\x00\x00\x00\x00\x00\x00", msg="packet 309/310", payload=b"\x00\x00\x00\x03")
     set_exp_setup(dev, 2000)
     # 2000 ms
     exposure = get_exp(dev)
@@ -205,13 +210,13 @@ def ham_init(dev, exp_ms=500):
     trig_int(dev)
     # 250 ms
     exposure = get_exp(dev)
-    validate_cmd1(dev, 0x2E, "\x00", msg="packet 345/346", payload="\x00\x00\x00\x12")
-    validate_cmd1(dev, 0x2E, "\x00", msg="packet 349/350", payload="\x00\x00\x00\x02")
+    validate_cmd1(dev, 0x2E, b"\x00", msg="packet 345/346", payload=b"\x00\x00\x00\x12")
+    validate_cmd1(dev, 0x2E, b"\x00", msg="packet 349/350", payload=b"\x00\x00\x00\x02")
     set_exp_setup(dev, 250)
     # 250 ms
     exposure = get_exp(dev)
     trig_int(dev)
-    return width, height
+    return width_ret, height_ret
 
 def check_sync(buff, verbose=True):
     syncpos = 0
@@ -248,7 +253,10 @@ def sync2str(word):
         }.get(word, "MSG_%04X" % word)
 
 # TODO: make this thread capable to always take images and suck off as needed
+#STATE_BEGIN = 'BEGIN'
+#STATE_END = 'END'
 class CapImgN:
+
     def __init__(self, dev, usbcontext, width, height, depth=2, n=1, verbose=1):
         self.dev = dev
         self.usbcontext = usbcontext
@@ -258,9 +266,10 @@ class CapImgN:
         self.height = height
         self.heightd = height * depth
         self.depth = depth
+        assert (width, height) == (2368, 2340), "FIXME DC12 temp"
         self.imgsz = width * height * depth
         self.n = n
-        self.state = MSG_END
+        #self.state = STATE_END
         self.urb_remain = 0
         """
         33 outstanding URBs at any time?
@@ -306,7 +315,6 @@ class CapImgN:
 
         # len(self.rawbuff) < imgx_sz and len(self.messages) < 1
         self.rawbuff = None
-        self.completions = []
         self.urb_max = 31
 
         # for debugging
@@ -317,47 +325,6 @@ class CapImgN:
         self.MSG_BEGIN_SZ = 2 + self.imgsz
         # Including average after
         self.imgx_sz = self.imgsz + 2
-
-
-    def handle_buff(self, buff):
-        sync = is_sync(buff)
-
-        if sync == MSG_WTF:
-            print("WARNING: MSG_WTF. Discarding buffers")
-            self.state = MSG_END
-            self.rawbuff = None
-            return
-
-        # Wait for begin
-        if self.state == MSG_END:
-            # Can get garbage packets while waiting for begin
-            if not sync:
-                return
-            # Might be garbage in the buffer from aggressive read
-            if sync == MSG_END:
-                return
-            # note buffer has garbage. Might have 0's or other data
-            assert sync == MSG_BEGIN, ("0x%04X" % sync)
-            self.state = MSG_BEGIN
-            if self.verbose:
-                print("")
-                print("")
-                print("")
-            self.rawbuff = bytearray()
-            self.packets = 0
-        # Wait for end
-        elif self.state == MSG_BEGIN:
-            if sync:
-                # alex saw MSG_WTF here
-                assert sync == MSG_END, ("0x%04X" % sync)
-                self.process_end(buff)
-                self.rawbuff = None
-                self.state = MSG_END
-            else:
-                self.packets += 1
-                self.rawbuff.extend(buff)
-        else:
-            assert 0, self.state
 
     def process_end(self, endbuff):
         self.verbose and print("rawbuff: %u bytes" % len(self.rawbuff))
@@ -377,6 +344,7 @@ class CapImgN:
             hexdump(footer, "Image footer")
             #hexdump(rawbuff, "Additional bytes")
             print("Additional bytes: %u" % len(self.rawbuff))
+            assert len(self.rawbuff) == 0, "Overshot by %u bytes" % (len(self.rawbuff) - self.imgx_sz,)
             # very slow
             # check_sync(self.rawbuff)
     
@@ -393,7 +361,7 @@ class CapImgN:
         # Rest of the message is garbage in sensor buffer
         endbuff = endbuff[0:MSG_END_SZ]
         hexdump(endbuff, "EOS")
-        assert opcode == MSG_END
+        assert opcode == MSG_END, opcode
         status, counter = struct.unpack('<HH', endbuff[2:])
         print("Status: %u, counter: %u" % (status, counter))
         if status == STATUS_NOK:
@@ -403,23 +371,35 @@ class CapImgN:
         
         assert len(rawimg) == self.imgsz, (len(rawimg), self.imgsz)
 
-        self.completions.append((counter, rawimg, average))
+        return counter, rawimg, average
 
     def async_cb(self, trans):
         try:
-            if self.running:
-                self.handle_buff(trans.getBuffer())
+            assert len(self.rawbuff) < self.imgx_sz, len(self.rawbuff)
+
+            self.urb_remain -= 1
+            if not self.running:
+                return
+
+            buff = trans.getBuffer()
+            sync = is_sync(buff)
+            if sync == MSG_WTF:
+                print("WARNING: resubmit")
+                trans.submit()
+                return
+
+            assert not sync, ("0x%04X" % sync, len(self.rawbuff))
+
+            self.packets += 1
+            self.rawbuff.extend(buff)
     
-            # Beware of corruption w/ multiple URBs in END state
-            if self.running:
-                if self.state == MSG_END and self.urb_remain == 1:
-                    trans.submit()
-                elif self.state == MSG_BEGIN:
-                    # Don't overrun device buffer
-                    # Seems to give corrupt buffers if more than one outstanding at any time
-                    trans.submit()
-            else:
-                self.urb_remain -= 1
+            est_submit = len(self.rawbuff) + self.urb_size * self.urb_remain
+            est_remain = self.imgx_sz - est_submit
+
+            if est_remain > 0:
+                assert len(self.rawbuff) < self.imgx_sz
+                self.urb_remain += 1
+                trans.submit()
         except:
             self.running = False
             raise
@@ -428,39 +408,73 @@ class CapImgN:
         # reference only does 31, so stay with that
         for _i in range(n):
             trans = self.dev.getTransfer()
-            trans.setBulk(0x82, self.urb_size, callback=self.async_cb, user_data=None, timeout=1000)
+            trans.setBulk(0x82, self.urb_size, callback=self.async_cb, user_data=None, timeout=2500)
             trans.submit()
             self.trans_l.append(trans)
             self.urb_remain += 1
 
+    def run_cap(self):
+        self.rawbuff = bytearray()
+        self.packets = 0
+
+        self.trans_l = []
+        self.urb_remain = 0
+
+        self.alloc_urb(31)
+
+        # Spend most of the time here
+        # URBs will be recycled until no longer needed
+        while self.urb_remain:
+            elapsed = int(time.time() - self.tstart) * 1000
+            if elapsed >= self.timeout_ms:
+                raise Exception("timeout after %s" % elapsed)
+
+            self.usbcontext.handleEventsTimeout(tv=0.1)
+
+        for trans in self.trans_l:
+            trans.close()
+
+        print("%u packets, %u bytes" % (self.packets, len(self.rawbuff)))
+        assert self.running
+
+    # TODO: reconsider error handling on bad messages
     def run(self, timeout_ms=2500):
+        self.timeout_ms = timeout_ms
         try:
-            tstart = time.time()
+            self.tstart = time.time()
+            for imgi in range(self.n):
+                while True:
+                    buff = self.dev.bulkRead(0x82, 512)
+                    sync = is_sync(buff)
+                    assert sync == MSG_BEGIN, sync
+                    # still get 0x8005
+                    # time.sleep(2)
     
-            self.trans_l = []
-            self.urb_remain = 0
+                    print("run_cap() begin")
+                    self.run_cap()
+                    print("run_cap() end")
     
-            self.alloc_urb(1)
+                    buff = self.dev.bulkRead(0x82, 512)
+                    sync = is_sync(buff)
+                    assert sync == MSG_END, sync
     
-            # Spend most of the time here
-            # URBs will be recycled until no longer needed
-            while self.urb_remain:
-                self.running = self.running and len(self.completions) < self.n
-                elapsed = int(time.time() - tstart) * 1000
-                if elapsed >= timeout_ms:
-                    raise Exception("timeout after %s" % elapsed)
-                # Pre-maturely allocating seems to cause issue
-                if self.running and self.state == MSG_BEGIN:
-                    self.alloc_urb(self.urb_max - self.urb_remain)
-    
-                self.usbcontext.handleEventsTimeout(tv=0.1)
-    
-            for trans in self.trans_l:
-                trans.close()
-            
-            # TODO: generate during process
-            for completion in self.completions:
-                yield completion
+                    yield self.process_end(buff)
+                    self.rawbuff = None
+                    break
+
+
+            buff = self.dev.bulkRead(0x82, 512)
+            sync = is_sync(buff)
+            assert sync == MSG_BEGIN, sync
+
+            abort_stream(self.dev)
+
+            for i in range(3):
+                buff = self.dev.bulkRead(0x82, 512)
+                if is_sync(buff) == MSG_ABORTED:
+                    break
+            else:
+                raise Exception("Failed to get abort")
         finally:
             self.running = False
 
