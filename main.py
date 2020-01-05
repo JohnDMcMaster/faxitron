@@ -17,7 +17,7 @@ def capture(args, outdir):
             open(binfn, 'w').write(buff)
         if args.png:
             print("Saving %s" % pngfn)
-            ham.decode(buff).save(pngfn)
+            h.decode(buff).save(pngfn)
 
     h = ham.Hamamatsu()
     mkdir_p(outdir)

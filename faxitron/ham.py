@@ -17,13 +17,11 @@ DC12_PID = 0xA800
 # TODO: consider upshifting to make raw easier to see
 PIX_MAX = 0x3FFF
 
-imgsz = 1032 * 1032 * 2
-
+MSG_ABORTED = 0x8001
 # 32770
 # Image start
 # Payload: length: image size + 2
 MSG_BEGIN = 0x8002
-MSG_BEGIN_SZ = 2 + imgsz
 # Payload length: 2 bytes
 # ex: value 3
 MSG_END = 0x8004
@@ -35,8 +33,17 @@ STATUS_OK = 3
 # observed around same time saw MSG_WTF
 STATUS_NOK = 7
 
-# Including average after
-imgx_sz = imgsz + 2
+def unpack32ub(buff):
+    return struct.unpack('>I', buff)[0]
+
+def unpack32ul(buff):
+    return struct.unpack('<I', buff)[0]
+
+def unpack16ub(buff):
+    return struct.unpack('>H', buff)[0]
+
+def unpack16ul(buff):
+    return struct.unpack('<H', buff)[0]
 
 def now():
     return datetime.datetime.utcnow().isoformat()
@@ -50,7 +57,7 @@ def validate_read(expected, actual, msg):
         print('  Actual:   %s' % binascii.hexlify(actual,))
         raise Exception('failed validate: %s' % msg)
 
-def bulk1(dev, cmd):
+def bulk1(dev, cmd, read=True):
     def bulkWrite(endpoint, data, timeout=None):
         dev.bulkWrite(endpoint, tobytes(data), timeout=(1000 if timeout is None else timeout))
 
@@ -62,7 +69,27 @@ def bulk1(dev, cmd):
         return ret
 
     bulkWrite(0x01, cmd)
-    return bulkRead(0x83, 0x0200)
+    if read:
+        return bulkRead(0x83, 0x0200)
+
+def cmd1(dev, opcode, payload=b"", read=True):
+    buff = struct.pack(">II", (opcode, len(payload)))
+    return bulk1(dev, buff + payload, read=read)
+
+
+def validate_cmd1(dev, opcode, expected, payload=b"", msg=""):
+    buff = cmd1(dev, opcode, payload=payload)
+    #got = struct.unpack(">c", buff)[0]
+    #assert expect == got, (msg, expect, got)
+    validate_read(expected, buff, msg)
+
+def cap_begin(dev):
+    validate_cmd1(dev, 0x0E, "\x01", payload=b"\x01", msg="cap_begin")
+
+def abort_stream(dev):
+    # Special: seems to be the only thing that doesn't get a reply?
+    # Usually these are followed by reply on 0x83, but instead it gets a reply on 0x83 as MSG_ABORTED
+    cmd1(dev, 0x0F, read=False)
 
 '''
 Sample info block:
@@ -77,7 +104,9 @@ Sample info block:
 00000070  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
 '''
 
-def parse_info(buff):
+def parse_info1(buff):
+    assert len(buff) == 0x80
+    buff = tostr(buff)
     assert len(buff) == 0x80
     vendor = buff[0x00:0x20].replace('\x00', '')
     model = buff[0x20:0x40].replace('\x00', '')
@@ -85,80 +114,104 @@ def parse_info(buff):
     sn = buff[0x60:0x80].replace('\x00', '')
     return vendor, model, ver, sn
 
-def get_info(dev):
-    validate_read(b"\x01", bulk1(dev, b"\x00\x00\x00\x00\x00\x00\x00\x00"), "packet 209/210")
-    ret = tostr(bulk1(dev, b"\x00\x00\x00\x01\x00\x00\x00\x00"))
-    assert len(ret) == 0x80
-    return ret
+def get_info1(dev):
+    return parse_info1(cmd1(dev, 1))
+
+def parse_info2(buff):
+    def unpack16(b):
+        return struct.unpack('>H', b)[0]
+    validate_read(binascii.unhexlify("000000140000"), buff[0:6], "packet 217/218-0")
+    width = unpack16(buff[6:8])
+    validate_read(binascii.unhexlify("0000"), buff[8:10], "packet 217/218-8")
+    height = unpack16(buff[10:12])
+    validate_read(binascii.unhexlify("0000001000000001"), buff[12:], "packet 217/218-12")
+    
+
+    assert (width, height) in [(1032, 1032), (2368,2340 )], (width, height)
+
+    return width, height
+
+def get_info2(dev):
+    """
+    0x0408 (1032), 0x0940 (2368), 0x0924 (2340)
+
+    DC5
+    Expected; b'0000001400000408000004080000001000000001'
+    DC12
+    Actual:   b'0000001400000940000009240000001000000001'
+    """
+    buff = cmd1(dev, 2)
+    return parse_info2(buff)
+
+def set_roi_wh(dev, width, height):
+    validate_read(b"\x01", cmd1(dev, 9, b"\x00\x01\x00\x00\x00\x00" + struct.pack('<HH', width, height)))
+
+def get_roi_wh(dev):
+    # DC5
+    # validate_read(b"\x00\x00\x04\x08\x00\x00\x04\x08", 
+    return struct.unpack('>II', cmd1(dev, 4))
+
 
 def ham_init(dev, exp_ms=500):
-    validate_read(b"\x01", bulk1(dev, b"\x00\x00\x00\x00\x00\x00\x00\x00"), "packet 211/212")
+    """
+    Generated from ./dc5/2019-12-26_02_init.pcapng
+    Augmented from ./dc12/2020-01-04_01_dc12_init_snap.pcapng
+    
+    Other:
+    DC5 seems to have default exposure 250 ms, but DC12 is 1000 ms
+    """
 
-    get_info(dev)
-    validate_read(
-            "\x00\x00\x00\x14\x00\x00\x04\x08\x00\x00\x04\x08\x00\x00\x00\x10" \
-            "\x00\x00\x00\x01"
-            , bulk1(dev, b"\x00\x00\x00\x02\x00\x00\x00\x00"), "packet 217/218")
-    validate_read(b"\x00\x00\x00\x06\x00\x00\x00\x20\x00\x00\x00\x03", bulk1(dev, b"\x00\x00\x00\x24\x00\x00\x00\x00"), "packet 221/222")
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x2A\x00\x00\x00\x00"), "packet 225/226")
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x39\x00\x00\x00\x00"), "packet 229/230")
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x3A\x00\x00\x00\x00"), "packet 233/234")
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x3B\x00\x00\x00\x00"), "packet 237/238")
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x3C\x00\x00\x00\x00"), "packet 241/242")
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x3D\x00\x00\x00\x00"), "packet 245/246")
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x4A\x00\x00\x00\x00"), "packet 249/250")
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x4F\x00\x00\x00\x00"), "packet 253/254")
-    validate_read(b"\x01", bulk1(dev, b"\x00\x00\x00\x23\x00\x00\x00\x00"), "packet 257/258")
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x29\x00\x00\x00\x00"), "packet 261/262")
-    validate_read(b"\x01", bulk1(dev, 
-            "\x00\x00\x00\x09\x00\x00\x00\x0A\x00\x01\x00\x00\x00\x00\x04\x08" \
-            "\x04\x08"
-            ), "packet 277/278")
-    validate_read(b"\x00\x00\x04\x08\x00\x00\x04\x08", bulk1(dev, b"\x00\x00\x00\x04\x00\x00\x00\x00"), "packet 281/282")
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x2E\x00\x00\x00\x04\x00\x00\x00\x02"), "packet 285/286")
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x2E\x00\x00\x00\x04\x00\x00\x00\x12"), "packet 289/290")
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x2E\x00\x00\x00\x04\x00\x00\x00\x18"), "packet 293/294")
-    validate_read(b"\x3F\x9E\xB8\x51\xEB\x85\x1E\xB8", bulk1(dev, b"\x00\x00\x00\x21\x00\x00\x00\x04\x00\x00\x00\x00"), "packet 297/298")
-    validate_read(b"\x40\x34\x00\x00\x00\x00\x00\x00", bulk1(dev, b"\x00\x00\x00\x21\x00\x00\x00\x04\x00\x00\x00\x01"), "packet 301/302")
-    validate_read(b"\x3F\x50\x62\x4D\xD2\xF1\xA9\xFC", bulk1(dev, b"\x00\x00\x00\x21\x00\x00\x00\x04\x00\x00\x00\x02"), "packet 305/306")
-    validate_read(b"\x00\x00\x00\x00\x00\x00\x00\x00", bulk1(dev, b"\x00\x00\x00\x21\x00\x00\x00\x04\x00\x00\x00\x03"), "packet 309/310")
-
-
-    set_exp(dev, exp_ms)
-    assert get_exp(dev) == exp_ms
-
-
+    validate_cmd1(dev, 0x00, "\x01", msg="packet 209/210")
+    # HAMAMATSU, C9730DK-11, 1.21, 5403219
+    vendor, model, ver, sn = get_info1(dev)
+    # 0x0408, 0x0408
+    width, height = get_info2(dev)
+    validate_cmd1(dev, 0x24, "\x00\x00\x00\x06\x00\x00\x00\x20\x00\x00\x00\x03", msg="packet 221/222")
+    validate_cmd1(dev, 0x2A, "\x00", msg="packet 225/226")
+    validate_cmd1(dev, 0x39, "\x00", msg="packet 229/230")
+    validate_cmd1(dev, 0x3A, "\x00", msg="packet 233/234")
+    validate_cmd1(dev, 0x3B, "\x00", msg="packet 237/238")
+    validate_cmd1(dev, 0x3C, "\x00", msg="packet 241/242")
+    validate_cmd1(dev, 0x3D, "\x00", msg="packet 245/246")
+    validate_cmd1(dev, 0x4A, "\x00", msg="packet 249/250")
+    validate_cmd1(dev, 0x4F, "\x00", msg="packet 253/254")
+    validate_cmd1(dev, 0x23, "\x01", msg="packet 257/258")
+    validate_cmd1(dev, 0x29, "\x00", msg="packet 261/262")
+    # HAMAMATSU, C9730DK-11, 1.21, 5403219
+    vendor, model, ver, sn = get_info1(dev)
+    # HAMAMATSU, C9730DK-11, 1.21, 5403219
+    vendor, model, ver, sn = get_info1(dev)
+    # HAMAMATSU, C9730DK-11, 1.21, 5403219
+    vendor, model, ver, sn = get_info1(dev)
+    set_roi_wh(dev, width, height)
+    # 0x0408, 0x0408
+    width, height = get_roi_wh(dev)
+    validate_cmd1(dev, 0x2E, "\x00", msg="packet 285/286", payload="\x00\x00\x00\x02")
+    validate_cmd1(dev, 0x2E, "\x00", msg="packet 289/290", payload="\x00\x00\x00\x12")
+    validate_cmd1(dev, 0x2E, "\x00", msg="packet 293/294", payload="\x00\x00\x00\x18")
+    validate_cmd1(dev, 0x21, "\x3F\x9E\xB8\x51\xEB\x85\x1E\xB8", msg="packet 297/298", payload="\x00\x00\x00\x00")
+    validate_cmd1(dev, 0x21, "\x40\x34\x00\x00\x00\x00\x00\x00", msg="packet 301/302", payload="\x00\x00\x00\x01")
+    validate_cmd1(dev, 0x21, "\x3F\x50\x62\x4D\xD2\xF1\xA9\xFC", msg="packet 305/306", payload="\x00\x00\x00\x02")
+    validate_cmd1(dev, 0x21, "\x00\x00\x00\x00\x00\x00\x00\x00", msg="packet 309/310", payload="\x00\x00\x00\x03")
+    set_exp_setup(dev, 2000)
+    # 2000 ms
+    exposure = get_exp(dev)
+    set_exp_setup(dev, 250)
+    # 250 ms
+    exposure = get_exp(dev)
+    set_exp_setup(dev, 250)
+    # 250 ms
+    exposure = get_exp(dev)
     trig_int(dev)
-
-
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x2E\x00\x00\x00\x04\x00\x00\x00\x12"), "packet 345/346")
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x2E\x00\x00\x00\x04\x00\x00\x00\x02"), "packet 349/350")
-
-    set_exp(dev, exp_ms)
-
-
+    # 250 ms
+    exposure = get_exp(dev)
+    validate_cmd1(dev, 0x2E, "\x00", msg="packet 345/346", payload="\x00\x00\x00\x12")
+    validate_cmd1(dev, 0x2E, "\x00", msg="packet 349/350", payload="\x00\x00\x00\x02")
+    set_exp_setup(dev, 250)
+    # 250 ms
+    exposure = get_exp(dev)
     trig_int(dev)
-
-
-    validate_read(b"\x01", bulk1(dev, 
-        "\x00\x00\x00\x09\x00\x00\x00\x0A\x00\x01\x00\x00\x00\x00\x04\x08" \
-        "\x04\x08"
-        ), "packet 1290/1291")
-
-
-    validate_read(b"\x00\x00\x04\x08\x00\x00\x04\x08", bulk1(dev, b"\x00\x00\x00\x04\x00\x00\x00\x00"), "packet 1294/1295")
-
-
-    validate_read(b"\x01", bulk1(dev, 
-        "\x00\x00\x00\x09\x00\x00\x00\x0A\x00\x01\x00\x00\x00\x00\x04\x08" \
-        "\x04\x08"
-        ), "packet 1290/1291")
-
-
-    validate_read(b"\x00\x00\x04\x08\x00\x00\x04\x08", bulk1(dev, b"\x00\x00\x00\x04\x00\x00\x00\x00"), "packet 1294/1295")
-    validate_read(b"\x00\x00\x04\x08\x00\x00\x04\x08", bulk1(dev, b"\x00\x00\x00\x04\x00\x00\x00\x00"), "packet 1294/1295")
-
-    validate_read(b"\x01", bulk1(dev, b"\x00\x00\x00\x0E\x00\x00\x00\x01\x01"), "packet 1398/1399")
+    return width, height
 
 def check_sync(buff, verbose=True):
     syncpos = 0
@@ -177,23 +230,79 @@ def check_sync(buff, verbose=True):
     return n
 
 def is_sync(buff, verbose=True):
+    if len(buff) == 0:
+        return 0
     pack2u = unpack16_le(buff[0:2])
     if pack2u >= 0x4000:
         verbose and print("%s MSG 0x%04X @ 0x%04X" % (now(), pack2u, 0))
-        hexdump(buff[0:16], "Sync found")
+        verbose and hexdump(buff[0:16], "Sync found")
         return pack2u
     else:
         return 0
 
+def sync2str(word):
+    return {
+        MSG_ABORTED: "MSG_ABORTED",
+        MSG_BEGIN: "MSG_BEGIN",
+        MSG_END: "MSG_END",
+        }.get(word, "MSG_%04X" % word)
+
 # TODO: make this thread capable to always take images and suck off as needed
 class CapImgN:
-    def __init__(self, dev, usbcontext, n=1, verbose=1):
+    def __init__(self, dev, usbcontext, width, height, depth=2, n=1, verbose=1):
         self.dev = dev
         self.usbcontext = usbcontext
         self.verbose = verbose
+        self.width = width
+        self.widthd = width * depth
+        self.height = height
+        self.heightd = height * depth
+        self.depth = depth
+        self.imgsz = width * height * depth
         self.n = n
         self.state = MSG_END
         self.urb_remain = 0
+        """
+        33 outstanding URBs at any time?
+        This is the repeating sequence (DC5, DC12)
+        Additionally BEGIN/END are 512 instead of 16384
+
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 3584, got 3584 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 16384, got 16384 bytes w/ sync NONE
+        # bulkRead(0x82): req 12800, got 12800 bytes w/ sync NONE
+
+        """
+        self.urb_size = 0x4000
 
         # len(self.rawbuff) < imgx_sz and len(self.messages) < 1
         self.rawbuff = None
@@ -203,6 +312,12 @@ class CapImgN:
         # for debugging
         self.packets = 0
         self.running = True
+
+
+        self.MSG_BEGIN_SZ = 2 + self.imgsz
+        # Including average after
+        self.imgx_sz = self.imgsz + 2
+
 
     def handle_buff(self, buff):
         sync = is_sync(buff)
@@ -234,7 +349,7 @@ class CapImgN:
         elif self.state == MSG_BEGIN:
             if sync:
                 # alex saw MSG_WTF here
-                assert sync == MSG_END, sync
+                assert sync == MSG_END, ("0x%04X" % sync)
                 self.process_end(buff)
                 self.rawbuff = None
                 self.state = MSG_END
@@ -245,15 +360,19 @@ class CapImgN:
             assert 0, self.state
 
     def process_end(self, endbuff):
-        buff = self.rawbuff[0:imgx_sz]
-        self.rawbuff = self.rawbuff[imgx_sz:]
-        rawimg = buff[0:imgsz]
-        footer = buff[imgsz:]
+        self.verbose and print("rawbuff: %u bytes" % len(self.rawbuff))
+        buff = self.rawbuff[0:self.imgx_sz]
+        self.verbose and print("buff: %u bytes" % len(buff))
+        self.rawbuff = self.rawbuff[self.imgx_sz:]
+        rawimg = buff[0:self.imgsz]
+        self.verbose and print("rawimg: %u bytes" % len(rawimg))
+        footer = buff[self.imgsz:]
+        self.verbose and print("footer: %u bytes" % len(footer))
 
         if self.verbose:
-            hexdump(buff[1032*0:1032*0+16], "First row")
-            hexdump(buff[1032*1:1032*1+16], "Second row")
-            hexdump(buff[1032*1031:1032*1031+16], "Last row")
+            hexdump(buff[self.widthd*0:self.widthd*0+16], "First row")
+            hexdump(buff[self.widthd*1:self.widthd*1+16], "Second row")
+            hexdump(buff[self.widthd*(self.width - 1):self.widthd*(self.width-1)+16], "Last row")
             hexdump(buff[-16:], "Last bytes")
             hexdump(footer, "Image footer")
             #hexdump(rawbuff, "Additional bytes")
@@ -282,7 +401,7 @@ class CapImgN:
             return
         assert status == STATUS_OK, status
         
-        assert len(rawimg) == imgsz, (len(rawimg), imgsz)
+        assert len(rawimg) == self.imgsz, (len(rawimg), self.imgsz)
 
         self.completions.append((counter, rawimg, average))
 
@@ -292,8 +411,13 @@ class CapImgN:
                 self.handle_buff(trans.getBuffer())
     
             # Beware of corruption w/ multiple URBs in END state
-            if self.running and (self.state == MSG_BEGIN or self.state == MSG_END and self.urb_remain == 1):
-                trans.submit()
+            if self.running:
+                if self.state == MSG_END and self.urb_remain == 1:
+                    trans.submit()
+                elif self.state == MSG_BEGIN:
+                    # Don't overrun device buffer
+                    # Seems to give corrupt buffers if more than one outstanding at any time
+                    trans.submit()
             else:
                 self.urb_remain -= 1
         except:
@@ -304,7 +428,7 @@ class CapImgN:
         # reference only does 31, so stay with that
         for _i in range(n):
             trans = self.dev.getTransfer()
-            trans.setBulk(0x82, 0x4000, callback=self.async_cb, user_data=None, timeout=1000)
+            trans.setBulk(0x82, self.urb_size, callback=self.async_cb, user_data=None, timeout=1000)
             trans.submit()
             self.trans_l.append(trans)
             self.urb_remain += 1
@@ -341,8 +465,8 @@ class CapImgN:
             self.running = False
 
 
-def cap_imgn(dev, usbcontext, n=1, timeout_ms=2500, verbose=1):
-    cap = CapImgN(dev, usbcontext, n=n, verbose=verbose)
+def cap_imgn(dev, usbcontext, width, height, depth=2, n=1, timeout_ms=2500, verbose=1):
+    cap = CapImgN(dev, usbcontext, width, height, depth=depth, n=n, verbose=verbose)
     try:
         for v in cap.run(timeout_ms=timeout_ms):
             yield v
@@ -350,10 +474,8 @@ def cap_imgn(dev, usbcontext, n=1, timeout_ms=2500, verbose=1):
         cap.running = False
 
 
-def decode(buff):
+def decode(buff, width, height, depth=2):
     '''Given bin return PIL image object'''
-    depth = 2
-    width, height = 1032, 1032
     buff = bytearray(buff)
     assert len(buff) == width * height * depth
 
@@ -368,52 +490,51 @@ def decode(buff):
             img.putpixel((x, y), (b1 << 8) + b0)
     return img
 
-def trig_sync(dev):
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x2D\x00\x00\x00\x02\x00\x05"), "packet 61/62")
+def trig_n(dev, n):
+    validate_cmd1(dev, 0x2D, "\x00", msg="trig_n()", payload=struct.pack(">H", n))
 
 def trig_int(dev):
-    validate_read(b"\x00", bulk1(dev, b"\x00\x00\x00\x2D\x00\x00\x00\x02\x00\x01"), "packet 61/62")
+    trig_n(dev, 1)
 
-def pack32(n):
-    return struct.pack('>I', n)
-
-def unpack32(buff):
-    return struct.unpack('>I', buff)[0]
-
-def unpack16(buff):
-    return struct.unpack('>H', buff)[0]
+def trig_sync(dev):
+    trig_n(dev, 5)
 
 def unpack16_le(buff):
     return struct.unpack('<H', buff)[0]
 
 def get_exp(dev):
-    return unpack32(bulk1(dev, b"\x00\x00\x00\x1F\x00\x00\x00\x00"))
+    def unpack32(buff):
+        return struct.unpack('>I', buff)[0]
 
-def set_exp(dev, exp_ms):
+    return unpack32(cmd1(dev, 0x1F))
+
+def set_exp_setup(dev, exp_ms):
+    def pack32(n):
+        return struct.pack('>I', n)
+
+    validate_cmd1(dev, 0x20, "\x01", payload=pack32(exp_ms), msg="set_exp_setup")
+    assert get_exp(dev) == exp_ms
+
+def set_exp(dev, exp_ms, width, height):
     # Determined experimentally
     # less than 30 verify fails
     # setting above 2000 seems to silently fail and peg at 2000
     # 3000 is slightly brighter than 2000 though, so the actual limit might be 2048 or something of that sort
     assert 30 <= exp_ms <= 2000
 
-    validate_read(b"\x01", bulk1(dev, b"\x00\x00\x00\x20\x00\x00\x00\x04" + pack32(exp_ms)), "exposure set")
-    assert get_exp(dev) == exp_ms
+    set_exp_setup(dev, exp_ms)
    
-    validate_read(b"\x01", bulk1(dev,
-            b"\x00\x00\x00\x09\x00\x00\x00\x0A\x00\x01\x00\x00\x00\x00\x04\x08" \
-            b"\x04\x08"
-            ), "packet 925/926")
-    validate_read(b"\x00\x00\x04\x08\x00\x00\x04\x08", bulk1(dev, b"\x00\x00\x00\x04\x00\x00\x00\x00"), "packet 929/930")
-    validate_read(b"\x01", bulk1(dev,
-            b"\x00\x00\x00\x09\x00\x00\x00\x0A\x00\x01\x00\x00\x00\x00\x04\x08" \
-            b"\x04\x08"
-            ), "packet 933/934")
-    validate_read(b"\x00\x00\x04\x08\x00\x00\x04\x08", bulk1(dev, b"\x00\x00\x00\x04\x00\x00\x00\x00"), "packet 937/938")
-    validate_read(b"\x00\x00\x04\x08\x00\x00\x04\x08", bulk1(dev, b"\x00\x00\x00\x04\x00\x00\x00\x00"), "packet 941/942")
+    """
+    set_roi_wh(dev, width, height)
+    get_roi_wh(dev)
+    set_roi_wh(dev, width, height)
+    get_roi_wh(dev)
+    get_roi_wh(dev)
 
     # adding this seems to actually confirm the exposure
     # tried removing and old is in place without it
-    validate_read(b"\x01", bulk1(dev, b"\x00\x00\x00\x0E\x00\x00\x00\x01\x01"), "packet 945/946")
+    cap_begin(dev)
+    """
 
 
 def open_dev(usbcontext=None, verbose=False):
@@ -448,18 +569,38 @@ class Hamamatsu:
         self.dev.claimInterface(0)
         self.dev.resetDevice()
         self.exp_ms = exp_ms
+
+        self.width = None
+        self.height = None
+        self.depth = 2
         if init:
-            ham_init(self.dev, exp_ms=self.exp_ms)
+            self.width, self.height = ham_init(self.dev, exp_ms=self.exp_ms)
+
         self.debug = 0
 
     def cap(self, cb, n=1):
+        # Generated from ./dc5/2019-12-26_02_init.pcapng
+        dev = self.dev
+        set_roi_wh(dev, self.width, self.height)
+        # 0x0940, 0x0924
+        width, height = get_roi_wh(dev)
+        set_roi_wh(dev, self.width, self.height)
+        # 0x0940, 0x0924
+        width, height = get_roi_wh(dev)
+        # 0x0940, 0x0924
+        width, height = get_roi_wh(dev)
+        cap_begin(dev)
+
+
+
+
         raws=[]
         print("Collecting")
         """
         timeout
         Give allocation for one corrupt image...ocassionally happens at begin
         """
-        for rawi, (counter, rawimg, _average) in enumerate(cap_imgn(self.dev, self.usbcontext, timeout_ms=((n + 1) * (self.exp_ms + 250) + 1000), n=n)):
+        for rawi, (counter, rawimg, _average) in enumerate(cap_imgn(self.dev, self.usbcontext, self.width, self.height, self.depth, timeout_ms=((n + 1) * (self.exp_ms + 250) + 1000), n=n)):
             print("img %u" % rawi)
             raws.append(rawimg)
         print("Dispatching")
@@ -474,16 +615,19 @@ class Hamamatsu:
 
     def set_exp(self, ms):
         self.exp_ms = ms
-        set_exp(self.dev, ms)
+        set_exp(self.dev, ms, width=self.width, height=self.height)
 
     def get_vendor(self):
-        return parse_info(get_info(self.dev))[0]
+        return get_info1(self.dev)[0]
     
     def get_model(self):
-        return parse_info(get_info(self.dev))[1]
+        return get_info1(self.dev)[1]
     
     def get_ver(self):
-        return parse_info(get_info(self.dev))[2]
+        return get_info1(self.dev)[2]
     
     def get_sn(self):
-        return parse_info(get_info(self.dev))[3]
+        return get_info1(self.dev)[3]
+
+    def decode(self, buff):
+        decode(buff, self.width, self.height)
