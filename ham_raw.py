@@ -40,9 +40,10 @@ def main():
     mkdir_p(outdir)
     #h.set_exp(args.exp)
 
-    print('')
-    print('')
-    print('')
+    if h.verbose:
+        print('')
+        print('')
+        print('')
 
     h.cap(cap_cb, n=args.n)
     

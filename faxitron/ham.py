@@ -236,7 +236,7 @@ def ham_init(dev, exp_ms=500):
     trig_int(dev)
     return width_ret, height_ret
 
-def check_sync(buff, verbose=True):
+def check_sync(buff, verbose=False):
     syncpos = 0
     n = 0
     while len(buff):
@@ -252,7 +252,7 @@ def check_sync(buff, verbose=True):
 
     return n
 
-def is_sync(buff, verbose=True):
+def is_sync(buff, verbose=False):
     if len(buff) == 0:
         return 0
     pix0 = unpack16ul(buff[0:2])
@@ -277,7 +277,7 @@ def sync2str(word):
 #STATE_BEGIN = 'BEGIN'
 #STATE_END = 'END'
 class CapImgN:
-    def __init__(self, dev, usbcontext, width, height, depth=2, n=1, verbose=1):
+    def __init__(self, dev, usbcontext, width, height, depth=2, n=1, verbose=0):
         self.dev = dev
         self.usbcontext = usbcontext
         self.verbose = verbose
@@ -286,7 +286,6 @@ class CapImgN:
         self.height = height
         self.heightd = height * depth
         self.depth = depth
-        assert (width, height) == (2368, 2340), "FIXME DC12 temp"
         self.imgsz = width * height * depth
         self.n = n
         #self.state = STATE_END
@@ -357,9 +356,6 @@ class CapImgN:
         footer = buff[self.imgsz:]
         self.verbose and print("footer: %u bytes" % len(footer))
 
-        for i, l in enumerate(self.lens):
-            print("%u %u" % (i, l))
-
         if self.verbose:
             hexdump(buff[self.widthd*0:self.widthd*0+16], "First row")
             hexdump(buff[self.widthd*1:self.widthd*1+16], "Second row")
@@ -384,10 +380,10 @@ class CapImgN:
         opcode = unpack16_le(endbuff[0:2])
         # Rest of the message is garbage in sensor buffer
         endbuff = endbuff[0:MSG_END_SZ]
-        hexdump(endbuff, "EOS")
+        self.verbose and hexdump(endbuff, "EOS")
         assert opcode == MSG_END, opcode
         status, counter = struct.unpack('<HH', endbuff[2:])
-        print("Status: %u, counter: %u" % (status, counter))
+        self.verbose and print("Status: %u, counter: %u" % (status, counter))
         if not status in (STATUS_OK_DC5, STATUS_OK_DC12):
             print("WARNING: bad status %u. Discarding frame" % status)
             return
@@ -405,7 +401,7 @@ class CapImgN:
 
             # f you API. Why would anyone want uninitialized memory?
             buff = trans.getBuffer()[:trans.getActualLength()]
-            sync = is_sync(buff)
+            sync = is_sync(buff, verbose=self.verbose)
             if sync:
                 net_bytes = 0 if self.rawbuff is None else len(self.rawbuff)
                 # Don't warn after recovering from error
@@ -477,7 +473,7 @@ class CapImgN:
         for trans in self.trans_l:
             trans.close()
 
-        print("%u packets, %u bytes" % (self.packets, len(self.rawbuff)))
+        self.verbose and print("%u packets, %u bytes" % (self.packets, len(self.rawbuff)))
         assert self.running
 
     """
@@ -503,19 +499,17 @@ class CapImgN:
                     self.packets = None
                     self.lens = []
                     buff = self.dev.bulkRead(0x82, 512)
-                    sync = is_sync(buff)
+                    sync = is_sync(buff, verbose=self.verbose)
                     if sync != MSG_BEGIN:
                         print("WARNING: expected BEGIN, got sync %s" % sync2str(sync))
                         continue
                     
                     # time.slesyep(0.016)
     
-                    print("run_cap() begin")
                     self.run_cap()
-                    print("run_cap() end")
     
                     buff = self.dev.bulkRead(0x82, 512)
-                    sync = is_sync(buff)
+                    sync = is_sync(buff, verbose=self.verbose)
                     if sync != MSG_END:
                         print("WARNING: expected END, got sync %s" % sync2str(sync))
                         continue
@@ -526,7 +520,7 @@ class CapImgN:
 
 
             buff = self.dev.bulkRead(0x82, 512)
-            sync = is_sync(buff)
+            sync = is_sync(buff, verbose=self.verbose)
             assert sync == MSG_BEGIN, sync2str(sync)
 
             abort_stream(self.dev)
@@ -534,7 +528,7 @@ class CapImgN:
             tabort = time.time()
             while time.time() - tabort < 1.0:
                 buff = self.dev.bulkRead(0x82, 512)
-                if is_sync(buff) == MSG_ABORTED:
+                if is_sync(buff, verbose=self.verbose) == MSG_ABORTED:
                     break
             else:
                 raise Exception("Failed to get abort")
@@ -542,7 +536,7 @@ class CapImgN:
             self.running = False
 
 
-def cap_imgn(dev, usbcontext, width, height, depth=2, n=1, timeout_ms=2500, verbose=1):
+def cap_imgn(dev, usbcontext, width, height, depth=2, n=1, timeout_ms=2500, verbose=0):
     cap = CapImgN(dev, usbcontext, width, height, depth=depth, n=n, verbose=verbose)
     try:
         for v in cap.run(timeout_ms=timeout_ms):
@@ -637,11 +631,10 @@ class Hamamatsu:
         self.depth = 2
         if init:
             self.width, self.height = ham_init(self.dev, exp_ms=self.exp_ms)
-
-        self.debug = 0
+        self.verbose = 0
 
     def cap(self, cb, n=1):
-        time.sleep(3)
+        #time.sleep(3)
 
         # Generated from ./dc5/2019-12-26_02_init.pcapng
         dev = self.dev
@@ -659,23 +652,20 @@ class Hamamatsu:
 
 
         raws=[]
-        print("Collecting")
+        self.verbose and print("Collecting")
         """
         timeout
         Give allocation for one corrupt image...ocassionally happens at begin
         """
-        for rawi, (counter, rawimg, _average) in enumerate(cap_imgn(self.dev, self.usbcontext, self.width, self.height, self.depth, timeout_ms=((n + 1) * (self.exp_ms + 250) + 1000), n=n)):
-            print("img %u" % rawi)
+        for rawi, (counter, rawimg, _average) in enumerate(cap_imgn(self.dev, self.usbcontext, self.width, self.height, self.depth, timeout_ms=((n + 1) * (self.exp_ms + 250) + 1000), n=n, verbose=self.verbose)):
+            print("Captured img %u" % rawi)
             raws.append(rawimg)
-        print("Dispatching")
+        self.verbose and print("Dispatching")
         for i in range(n):
-            print("img %u" % i)
+            self.verbose and print("img %u" % i)
             raw = raws[i]
-            # very slow
-            #if self.debug:
-            #    assert check_sync(raw), "Found sync word in image data"
             cb(i, raw)
-        print("exp: %u" % get_exp(self.dev))
+        # self.verbose and print("exp: %u" % get_exp(self.dev))
 
     def set_exp(self, ms):
         self.exp_ms = ms
