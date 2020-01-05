@@ -619,7 +619,7 @@ High level API object
 """
 
 class Hamamatsu:
-    def __init__(self, exp_ms=1000, init=True):
+    def __init__(self, exp_ms=1000, init=True, verbose=False):
         self.usbcontext = usb1.USBContext()
         self.dev = open_dev(self.usbcontext)
         self.dev.claimInterface(0)
@@ -631,7 +631,7 @@ class Hamamatsu:
         self.depth = 2
         if init:
             self.width, self.height = ham_init(self.dev, exp_ms=self.exp_ms)
-        self.verbose = 0
+        self.verbose = verbose
 
     def cap(self, cb, n=1):
         #time.sleep(3)
@@ -660,7 +660,7 @@ class Hamamatsu:
         for rawi, (counter, rawimg, _average) in enumerate(cap_imgn(self.dev, self.usbcontext, self.width, self.height, self.depth, timeout_ms=((n + 1) * (self.exp_ms + 250) + 1000), n=n, verbose=self.verbose)):
             print("Captured img %u" % rawi)
             raws.append(rawimg)
-        self.verbose and print("Dispatching")
+        self.verbose and print("Dispatching %u" % n)
         for i in range(n):
             self.verbose and print("img %u" % i)
             raw = raws[i]

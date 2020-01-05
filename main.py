@@ -1,33 +1,10 @@
 #!/usr/bin/env python3
 
-from faxitron.util import add_bool_arg, default_date_dir, mkdir_p
-from faxitron import ham
-from faxitron import util
+from faxitron.util import add_bool_arg, default_date_dir
+from faxitron import im_util
 from faxitron import xray
+import ham_raw
 import ham_process
-import os
-
-def capture(args, outdir):
-    def cap_cb(n, buff):
-        binfn = os.path.join(outdir, 'cap_%02u.bin' % n)
-        pngfn = os.path.join(outdir, 'cap_%02u.png' % n)
-        
-        if args.bin:
-            print("Saving %s" % binfn)
-            open(binfn, 'w').write(buff)
-        if args.png:
-            print("Saving %s" % pngfn)
-            h.decode(buff).save(pngfn)
-
-    h = ham.Hamamatsu()
-    mkdir_p(outdir)
-    h.set_exp(args.exp)
-
-    print('')
-    print('')
-    print('')
-
-    h.cap(cap_cb, n=args.n)
 
 def main():
     import argparse 
@@ -67,12 +44,12 @@ def main():
     fire_verbose = True
     xr and xr.fire_begin(verbose=fire_verbose)
     try:
-        capture(args, outdir)
+        ham_raw.run(outdir=outdir, postfix=args.postfix, n=args.n)
     # notably ^C can cause this
     finally:
         xr and xr.fire_abort(verbose=fire_verbose)
 
-    ham_process.run(outdir, args.fn_out, cal_dir=args.cal_dir, hist_eq=args.hist_eq, raw=args.raw, hist_eq_roi=util.parse_roi(args.hist_eq_roi))
+    ham_process.run(outdir, args.fn_out, cal_dir=args.cal_dir, hist_eq=args.hist_eq, raw=args.raw, hist_eq_roi=im_util.parse_roi(args.hist_eq_roi))
 
     print("done")
 
