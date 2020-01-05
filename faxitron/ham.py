@@ -375,38 +375,40 @@ class CapImgN:
 
     def async_cb(self, trans):
         try:
-            assert len(self.rawbuff) < self.imgx_sz, len(self.rawbuff)
-
             self.urb_remain -= 1
+            self.packets += 1
             if not self.running:
                 return
 
             buff = trans.getBuffer()
             sync = is_sync(buff)
-            if sync == MSG_WTF:
-                print("WARNING: resubmit")
+            if sync == MSG_BEGIN:
+                self.rawbuff = bytearray()
                 trans.submit()
-                return
-
-            assert not sync, ("0x%04X" % sync, len(self.rawbuff))
-
-            self.packets += 1
-            self.rawbuff.extend(buff)
+            elif sync == MSG_WTF:
+                print("WARNING: MSG_WTF")
+                trans.submit()
+                self.rawbuff = None
+            else:
+                assert len(self.rawbuff) < self.imgx_sz, len(self.rawbuff)
+                assert not sync, ("0x%04X" % sync, len(self.rawbuff))
     
-            est_submit = len(self.rawbuff) + self.urb_size * self.urb_remain
-            est_remain = self.imgx_sz - est_submit
-
-            if est_remain > 0:
-                assert len(self.rawbuff) < self.imgx_sz
-                self.urb_remain += 1
-                trans.submit()
+                self.rawbuff.extend(buff)
+        
+                est_submit = len(self.rawbuff) + self.urb_size * self.urb_remain
+                est_remain = self.imgx_sz - est_submit
+    
+                if est_remain > 0:
+                    assert len(self.rawbuff) < self.imgx_sz
+                    self.urb_remain += 1
+                    trans.submit()
         except:
             self.running = False
             raise
 
     def alloc_urb(self, n):
         # reference only does 31, so stay with that
-        for _i in range(n):
+        for urbi in range(n):
             trans = self.dev.getTransfer()
             trans.setBulk(0x82, self.urb_size, callback=self.async_cb, user_data=None, timeout=2500)
             trans.submit()
@@ -414,7 +416,7 @@ class CapImgN:
             self.urb_remain += 1
 
     def run_cap(self):
-        self.rawbuff = bytearray()
+        self.rawbuff = None
         self.packets = 0
 
         self.trans_l = []
@@ -443,24 +445,24 @@ class CapImgN:
         try:
             self.tstart = time.time()
             for imgi in range(self.n):
-                while True:
-                    buff = self.dev.bulkRead(0x82, 512)
-                    sync = is_sync(buff)
-                    assert sync == MSG_BEGIN, sync
-                    # still get 0x8005
-                    # time.sleep(2)
-    
-                    print("run_cap() begin")
-                    self.run_cap()
-                    print("run_cap() end")
-    
-                    buff = self.dev.bulkRead(0x82, 512)
-                    sync = is_sync(buff)
-                    assert sync == MSG_END, sync
-    
-                    yield self.process_end(buff)
-                    self.rawbuff = None
-                    break
+                """
+                buff = self.dev.bulkRead(0x82, 512)
+                sync = is_sync(buff)
+                assert sync == MSG_BEGIN, sync
+                # still get 0x8005
+                # time.sleep(2)
+                """
+
+                print("run_cap() begin")
+                self.run_cap()
+                print("run_cap() end")
+
+                buff = self.dev.bulkRead(0x82, 512)
+                sync = is_sync(buff)
+                assert sync == MSG_END, sync
+
+                yield self.process_end(buff)
+                self.rawbuff = None
 
 
             buff = self.dev.bulkRead(0x82, 512)
