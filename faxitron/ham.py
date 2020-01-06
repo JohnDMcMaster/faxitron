@@ -389,8 +389,8 @@ class CapImgN:
         status, counter = struct.unpack('<HH', endbuff[2:])
         self.verbose and print("Status: %u, counter: %u" % (status, counter))
         if not status in (STATUS_OK_DC5, STATUS_OK_DC12):
-            print("WARNING: bad status %u. Discarding frame" % status)
-            return
+            print("WARNING: bad status %u. Discarding frame and re-triggering" % status)
+            return None
         
         assert len(rawimg) == self.imgsz, (len(rawimg), self.imgsz)
 
@@ -442,7 +442,7 @@ class CapImgN:
         # reference only does 31, so stay with that
         for urbi in range(33):
             trans = self.dev.getTransfer()
-            if 1:
+            if 0:
                 if urbi == 1:
                     urb_size = 3584
                 elif urbi == 32:
@@ -498,11 +498,14 @@ class CapImgN:
         try:
             self.tstart = time.time()
             for imgi in range(self.n):
-                while True:
+                if not self.running:
+                    break
+
+                while self.running:
                     self.rawbuff = None
                     self.packets = None
                     self.lens = []
-                    buff = self.dev.bulkRead(0x82, 512)
+                    buff = self.dev.bulkRead(0x82, 512, timeout=2500)
                     sync = is_sync(buff, verbose=self.verbose)
                     if sync != MSG_BEGIN:
                         print("WARNING: expected BEGIN, got sync %s" % sync2str(sync))
@@ -512,26 +515,31 @@ class CapImgN:
     
                     self.run_cap()
     
-                    buff = self.dev.bulkRead(0x82, 512)
+                    buff = self.dev.bulkRead(0x82, 512, timeout=2500)
                     sync = is_sync(buff, verbose=self.verbose)
                     if sync != MSG_END:
                         print("WARNING: expected END, got sync %s" % sync2str(sync))
                         continue
     
-                    yield self.process_end(buff)
+                    res = self.process_end(buff)
+                    if res is None:
+                        # This appears to result in a bunch of END without resolution
+                        # Abort capture for higher level logic to restart
+                        self.running = False
+                        break
+                    yield res
                     self.rawbuff = None
                     break
-
-
-            buff = self.dev.bulkRead(0x82, 512)
-            sync = is_sync(buff, verbose=self.verbose)
-            assert sync == MSG_BEGIN, sync2str(sync)
+            if self.running:
+                buff = self.dev.bulkRead(0x82, 512, timeout=2500)
+                sync = is_sync(buff, verbose=self.verbose)
+                assert sync == MSG_BEGIN, sync2str(sync)
 
             abort_stream(self.dev)
 
             tabort = time.time()
             while time.time() - tabort < 1.0:
-                buff = self.dev.bulkRead(0x82, 512)
+                buff = self.dev.bulkRead(0x82, 512, timeout=2500)
                 if is_sync(buff, verbose=self.verbose) == MSG_ABORTED:
                     break
             else:
@@ -640,19 +648,18 @@ class Hamamatsu:
     def cap(self, cb, n=1):
         #time.sleep(3)
 
-        # Generated from ./dc5/2019-12-26_02_init.pcapng
-        dev = self.dev
-        set_roi_wh(dev, self.width, self.height)
-        # 0x0940, 0x0924
-        width, height = get_roi_wh(dev)
-        set_roi_wh(dev, self.width, self.height)
-        # 0x0940, 0x0924
-        width, height = get_roi_wh(dev)
-        # 0x0940, 0x0924
-        width, height = get_roi_wh(dev)
-        force_trig(dev)
-
-
+        def setup():
+            # Generated from ./dc5/2019-12-26_02_init.pcapng
+            dev = self.dev
+            set_roi_wh(dev, self.width, self.height)
+            # 0x0940, 0x0924
+            width, height = get_roi_wh(dev)
+            set_roi_wh(dev, self.width, self.height)
+            # 0x0940, 0x0924
+            width, height = get_roi_wh(dev)
+            # 0x0940, 0x0924
+            width, height = get_roi_wh(dev)
+            force_trig(dev)
 
 
         raws=[]
@@ -661,9 +668,17 @@ class Hamamatsu:
         timeout
         Give allocation for one corrupt image...ocassionally happens at begin
         """
-        for rawi, (counter, rawimg, _average) in enumerate(cap_imgn(self.dev, self.usbcontext, self.width, self.height, self.depth, timeout_ms=((n + 1) * (self.exp_ms + 250) + 1000), n=n, verbose=self.verbose)):
-            print("Captured img %u" % rawi)
-            raws.append(rawimg)
+        trigi = 0
+        while True:
+            to_cap = n - len(raws)
+            if to_cap <= 0:
+                break
+            print("Trig %u, to_cap %u" % (trigi, to_cap))
+            setup()
+            for _counter, rawimg, _average in cap_imgn(self.dev, self.usbcontext, self.width, self.height, self.depth, timeout_ms=((to_cap + 1) * (self.exp_ms + 250) + 1000), n=to_cap, verbose=self.verbose):
+                print("Captured img %u" % len(raws))
+                raws.append(rawimg)
+            trigi += 1
         self.verbose and print("Dispatching %u" % n)
         for i in range(n):
             self.verbose and print("img %u" % i)
