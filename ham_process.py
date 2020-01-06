@@ -88,7 +88,7 @@ def run(dir_in, fn_out, cal_dir=None, hist_eq=True, invert=True, hist_eq_roi=Non
             assert os.path.exists(cal_dir)
             print("Found calibration files at %s" % cal_dir)
 
-        if rescale:
+        if rescale and cal_dir:
             ffimg = Image.open(os.path.join(cal_dir, 'ff.png'))
             np_ff2 = np.array(ffimg)
             dfimg = Image.open(os.path.join(cal_dir, 'df.png'))
@@ -117,7 +117,7 @@ def run(dir_in, fn_out, cal_dir=None, hist_eq=True, invert=True, hist_eq_roi=Non
             print("Rescale min: %u, max: %u" % (np.ndarray.min(np.array(im_wip)), np.ndarray.max(np.array(im_wip))))
     
         # Seems this needs to be done after scaling or artifacts get amplified
-        if bpr:
+        if bpr and cal_dir:
             badimg = Image.open(os.path.join(cal_dir, 'bad.png'))
             im_wip = do_bpr(im_wip, badimg)
             print("BPR min: %u, max: %u" % (np.ndarray.min(np.array(im_wip)), np.ndarray.max(np.array(im_wip))))
