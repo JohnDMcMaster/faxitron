@@ -27,7 +27,8 @@ def run(outdir, postfix, n, bin_out=False, png_out=True, exp=2000, verbose=False
     h = ham.Hamamatsu(verbose=verbose)
     mkdir_p(outdir)
     h.write_json(outdir)
-    #h.set_exp(exp)
+    print("Setting exposure %u ms" % exp)
+    h.set_exp(exp)
 
     if h.verbose:
         print('')
