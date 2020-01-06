@@ -698,6 +698,8 @@ class Hamamatsu:
             "ver": ver,
             "sn": sn,
             "exp_ms": self.exp_ms,
+            "width": self.width,
+            "height": self.height,
             }
 
     def write_json(self, outdir):

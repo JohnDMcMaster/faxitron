@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -ex
 
-n=32
-mkdir -p cal
-python3 main.py --kvp 0 -n $n --dir cal/df --raw
-python3 main.py --kvp 35 -n $n --dir cal/ff --raw
-python3 cal.py cal/ff cal/df cal
+n=${CALN,32}
+d=$(python3 cal_dir.py)
+echo "Output dir $d: writing $n files"
+mkdir -p $d
+python3 main.py --kvp 0 -n $n --dir $d/df --raw
+python3 main.py --kvp 35 -n $n --dir $d/ff --raw
+python3 cal.py $d/ff $d/df $d
 

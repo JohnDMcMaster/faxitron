@@ -12,7 +12,7 @@ Arbitrarily going to set to black to good pixel, white for bad pixel
 from faxitron.util import hexdump, add_bool_arg, default_date_dir, mkdir_p
 from faxitron import ham
 from faxitron import util
-from faxitron.util import width, height, depth
+from faxitron import im_util
 
 import binascii
 import glob
@@ -41,6 +41,7 @@ def bad_pixs_ff(fff, ffi, thresh_scalar=0.25):
     print("min: %0.1f, med: %0.1f, max: %0.1f" % (np.amin(fff), ffmed, np.amax(fff)))
 
     ret = []
+    width, height = ffi.size
     thresh = ffmed * thresh_scalar
     for y in range(height):
         for x in range(width):
@@ -58,6 +59,7 @@ def bad_pixs_df(fff, ffi, thresh_scalar=0.25):
     print("min: %0.1f, med: %0.1f, max: %0.1f" % (np.amin(fff), ffmed, np.amax(fff)))
 
     ret = []
+    width, height = ffi.size
     thresh = ham.PIX_MAX * thresh_scalar
     for y in range(height):
         for x in range(width):
@@ -79,22 +81,28 @@ def main():
     parser.add_argument('--df-thresh', default=0.25, type=float, help='')
     parser.add_argument('ff_dir', help='')
     parser.add_argument('df_dir', help='')
-    parser.add_argument('cal_dir', help='')
+    parser.add_argument('cal_dir', nargs='?', default=None, help='')
     args = parser.parse_args()
     
     cal_dir = args.cal_dir
+    if not cal_dir:
+        cal_dir_ff = im_util.default_cal_dir(im_dir=args.ff_dir)
+        cal_dir_df = im_util.default_cal_dir(im_dir=args.df_dir)
+        assert cal_dir_ff == cal_dir_df, "Files are from different sensors"
+        cal_dir = cal_dir_ff
     mkdir_p(cal_dir)
-    badimg = Image.new("1", (height, width), "Black")
 
-    fff, ffi = util.average_dir(args.ff_dir, images=args.images)
+    fff, ffi = im_util.average_dir(args.ff_dir, images=args.images)
+    width, height = ffi.size
+    badimg = Image.new("1", (width, height), "Black")
     ffi.save(cal_dir + '/ff.png')
-    util.histeq_im(ffi).save(cal_dir + '/ffe.png')
+    im_util.histeq_im(ffi).save(cal_dir + '/ffe.png')
     for x, y in bad_pixs_ff(fff, ffi, thresh_scalar=args.ff_thresh):
         badimg.putpixel((x, y), 1)
 
-    dff, dfi = util.average_dir(args.df_dir, images=args.images)
+    dff, dfi = im_util.average_dir(args.df_dir, images=args.images)
     dfi.save(cal_dir + '/df.png')
-    util.histeq_im(dfi).save(cal_dir + '/dfe.png')
+    im_util.histeq_im(dfi).save(cal_dir + '/dfe.png')
     for x, y in bad_pixs_df(dff, dfi, thresh_scalar=args.df_thresh):
         badimg.putpixel((x, y), 1)
 

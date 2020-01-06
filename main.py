@@ -23,7 +23,7 @@ def main():
     parser.add_argument('-n', default=8, type=int, help='Number images')
     parser.add_argument('--exp', default=2000, type=int, help='Exposure ms')
     parser.add_argument('--postfix', default=None, help='')
-    parser.add_argument('--cal-dir', default='cal', help='')
+    parser.add_argument('--cal-dir', default=None, help='')
     # Generally the center is the most interesting
     parser.add_argument('--hist-eq-roi', default="258,258,516,516", help='hist eq x1,y1,x2,y2')
     add_bool_arg(parser, "--hist-eq", default=True)

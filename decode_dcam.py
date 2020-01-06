@@ -30,7 +30,7 @@ def decode(buff):
     buff = bytearray(buff)
 
     # no need to reallocate each loop
-    img = Image.new("I", (height, width), "White")
+    img = Image.new("I", (width, height), "White")
 
     for y in range(height):
         line0 = buff[y * width * depth:(y + 1) * width * depth]

@@ -2,6 +2,7 @@ import numpy as np
 from PIL import Image
 import glob
 import os
+import json
 
 def parse_roi(s):
     if s is None:
@@ -59,22 +60,21 @@ def im_inv16_slow(im):
     ret = Image.fromarray(im32_1d.reshape(im32_2d.shape))
     return ret
 
-depth = 2
-height, width = 1032, 1032
-
 def npf2im(statef):
     #return statef, None
     rounded = np.round(statef)
     #print("row1: %s" % rounded[1])
     statei = np.array(rounded, dtype=np.uint16)
     #print(len(statei), len(statei[0]), len(statei[0]))
+    height = len(statef)
+    width = len(statef[0])
 
     # for some reason I isn't working correctly
     # only L
     #im = Image.fromarray(statei, mode="I")
     #im = Image.fromarray(statei, mode="L")
     # workaround by plotting manually
-    im = Image.new("I", (height, width), "Black")
+    im = Image.new("I", (width, height), "Black")
     for y, row in enumerate(statei):
         for x, val in enumerate(row):
             # this causes really weird issues if not done
@@ -88,6 +88,7 @@ def average_imgs(imgs, scalar=None):
         scalar = 1.0
     scalar = scalar / len(imgs)
 
+    width, height = imgs[0].size
     statef = np.zeros((height, width), np.float)
     for im in imgs:
         statef = statef + scalar * np.array(im, dtype=np.float)
@@ -95,7 +96,6 @@ def average_imgs(imgs, scalar=None):
     return statef, npf2im(statef)
 
 def average_dir(din, images=0, verbose=1, scalar=None):
-    pixs = width * height
     imgs = []
 
     files = list(glob.glob(os.path.join(din, "cap_*.png")))
@@ -107,3 +107,20 @@ def average_dir(din, images=0, verbose=1, scalar=None):
             verbose and print("WARNING: only using first %u images" % images)
             break
     return average_imgs(imgs, scalar=scalar)
+
+def default_cal_dir(j=None, im_dir=None):
+    if im_dir:
+        j = json.load(open(os.path.join(im_dir, "sensor.json"), "r"))
+    assert j
+    """
+    {
+        "exp_ms": 1000,
+        "model": "C9730DK-11",
+        "sn": "5403219",
+        "vendor": "HAMAMATSU",
+        "ver": "1.21"
+    }
+    """
+    d = "%s_%s" % (j["model"], j["sn"])
+    d = d.lower()
+    return os.path.join("cal", d)
