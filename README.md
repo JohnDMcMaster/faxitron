@@ -58,13 +58,13 @@ Verify installation by checking communication:
 python3 dump.py
 ```
 
-Then if you wish close the door and take an uncalibrated x-ray:
+Then if you wish close the door and take an x-ray:
 
 ```
-python3 main.py --raw
+python3 main.py
 ```
 
-Images will be stored to directory "out". However, to get good images you should run calibration instead of just capturing raw images
+You may get a warning about missing calibration. Images will be stored to directory "out". However, to get good images you should run calibration as outlined below
 
 ## Collect diagnostic information
 
@@ -94,7 +94,7 @@ Other: a bad pixel is currently defined as one that fails to cover at least 25% 
 
 ## Imaging
 
-After calibration you no longer need --raw:
+With calibration generated, you should no longer get a calibration warning:
 
 ```
 python3 main.py
