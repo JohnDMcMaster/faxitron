@@ -5,6 +5,7 @@ import datetime
 import time
 import usb1
 from faxitron.util import hexdump, add_bool_arg, tobytes, tostr
+from faxitron import util
 from PIL import Image
 import os
 import struct
@@ -124,6 +125,9 @@ Sample info block:
 00000070  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
 '''
 
+def get_info1_raw(dev):
+    return cmd1(dev, 1)
+
 def parse_info1(buff):
     assert len(buff) == 0x80
     buff = tostr(buff)
@@ -135,7 +139,7 @@ def parse_info1(buff):
     return vendor, model, ver, sn
 
 def get_info1(dev):
-    return parse_info1(cmd1(dev, 1))
+    return parse_info1(get_info1_raw(dev))
 
 def parse_info2(buff):
     def unpack16(b):
@@ -685,3 +689,16 @@ class Hamamatsu:
 
     def decode(self, buff):
         return decode(buff, self.width, self.height)
+
+    def get_json(self):
+        vendor, model, ver, sn = get_info1(self.dev)
+        return {
+            "vendor": vendor,
+            "model": model,
+            "ver": ver,
+            "sn": sn,
+            "exp_ms": self.exp_ms,
+            }
+
+    def write_json(self, outdir):
+        util.json_write(os.path.join(outdir, "sensor.json"), self.get_json())

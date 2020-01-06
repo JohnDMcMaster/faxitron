@@ -26,13 +26,16 @@ def main():
     print("Writing to %s" % outdir)
 
     if args.ham:
+        # Parse minimally
+        # This is for diagnostic dumps with unknown formats
+
         print("")
         print("Sensor")
         h = ham.Hamamatsu(init=False)
 
-        info = ham.get_info(h.dev)
+        info = ham.get_info1_raw(h.dev)
         # util.hexdump(info)
-        vendor, model, ver, sn = ham.parse_info(info)
+        vendor, model, ver, sn = ham.parse_info1(info)
         print("Vendor: %s" % vendor)
         print("Model: %s" % model)
         print("Version: %s" % ver)
@@ -45,15 +48,8 @@ def main():
         print("")
         print("X-ray")
         xr = xray.XRay(port=args.port, verbose=args.verbose)
+        j = xr.get_json()
 
-        j = {
-            "dev": xr.get_device(),
-            "rev": xr.get_revision(),
-            "mode": xr.get_mode(),
-            "state": xr.get_state(),
-            "timed": xr.get_timed(),
-            "kvp": xr.get_kvp(),
-        }
         print("Device %s, version %s" % (j["dev"], j["rev"]))
         print("Front panel mode: %s " % j["mode"])
         print("State: %s" % j["state"])
@@ -61,7 +57,7 @@ def main():
         print("kVp %u" % j["kvp"])
         fn = os.path.join(outdir, "xray.json")
         print("Writing %s" % fn)
-        open(fn, 'w').write(json.dumps(j, sort_keys=True, indent=4, separators=(',', ': ')))
+        util.json_write(fn, j)
 
 if __name__ == "__main__":
     main()

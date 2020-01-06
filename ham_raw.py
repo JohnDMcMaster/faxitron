@@ -9,7 +9,7 @@ import os
 from faxitron import ham
 import glob
 
-def run(outdir, postfix, n, bin_out=False, png_out=True, verbose=False):
+def run(outdir, postfix, n, bin_out=False, png_out=True, exp=2000, verbose=False):
     if outdir is None:
         outdir = default_date_dir("out", "", postfix)
 
@@ -26,7 +26,8 @@ def run(outdir, postfix, n, bin_out=False, png_out=True, verbose=False):
 
     h = ham.Hamamatsu(verbose=verbose)
     mkdir_p(outdir)
-    #h.set_exp(args.exp)
+    h.write_json(outdir)
+    #h.set_exp(exp)
 
     if h.verbose:
         print('')
@@ -48,7 +49,7 @@ def main():
     parser.add_argument('--postfix', default=None, help='')
     args = parser.parse_args()
 
-    run(args.dir, postfix=args.postfix, n=args.n, bin_out=args.bin, png_out=args.png, verbose=args.verbose)
+    run(args.dir, postfix=args.postfix, n=args.n, bin_out=args.bin, png_out=args.png, exp=args.exp, verbose=args.verbose)
 
 if __name__ == "__main__":
     main()

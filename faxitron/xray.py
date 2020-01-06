@@ -7,8 +7,10 @@ Faxitron Documents/Faxitron Serial Commands MX-20 and DX-50.txt
 Wonder where those came from?
 """
 
+from faxitron import util
 import serial
 import time
+import os 
 
 class Timeout(Exception):
     pass
@@ -314,3 +316,16 @@ class XRay:
     def fire_abort(self, verbose=False):
         verbose and print("fire: aborting")
         self.send("A")
+
+    def get_json(self):
+        return {
+            "dev": self.get_device(),
+            "rev": self.get_revision(),
+            "mode": self.get_mode(),
+            "state": self.get_state(),
+            "timed": self.get_timed(),
+            "kvp": self.get_kvp(),
+        }
+
+    def write_json(self, outdir):
+        util.json_write(os.path.join(outdir, "source.json"), self.get_json())

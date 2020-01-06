@@ -5,6 +5,7 @@ import glob
 import shutil
 import tempfile
 import errno
+import json
 
 def add_bool_arg(parser, yes_arg, default=False, **kwargs):
     dashed = yes_arg.replace('--', '')
@@ -164,3 +165,6 @@ class AutoTempFN:
             os.unlink(self.name)
         except:
             pass
+
+def json_write(fn, j):
+    open(fn, 'w').write(json.dumps(j, sort_keys=True, indent=4, separators=(',', ': ')))

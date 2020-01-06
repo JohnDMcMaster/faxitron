@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
-from faxitron.util import add_bool_arg, default_date_dir
+from faxitron.util import add_bool_arg, default_date_dir, mkdir_p
+from faxitron import util
 from faxitron import im_util
 from faxitron import xray
 import ham_raw
 import ham_process
+import os
 
 def main():
     import argparse 
@@ -35,6 +37,8 @@ def main():
 
     if args.kvp:
         xr = xray.XRay(port=args.port, verbose=args.verbose)
+        mkdir_p(outdir)
+        xr.write_json(outdir)
         xr.set_kvp(args.kvp)    
         # FIXME: do something more intelligment
         xr.set_time(300)
@@ -44,13 +48,13 @@ def main():
     fire_verbose = True
     xr and xr.fire_begin(verbose=fire_verbose)
     try:
-        ham_raw.run(outdir=outdir, postfix=args.postfix, n=args.n)
+        ham_raw.run(outdir=outdir, postfix=args.postfix, n=args.n, exp=args.exp)
     # notably ^C can cause this
     finally:
         xr and xr.fire_abort(verbose=fire_verbose)
 
     ham_process.run(outdir, args.fn_out, cal_dir=args.cal_dir, hist_eq=args.hist_eq, raw=args.raw, hist_eq_roi=im_util.parse_roi(args.hist_eq_roi))
-
+    
     print("done")
 
 if __name__ == "__main__":

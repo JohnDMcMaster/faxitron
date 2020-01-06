@@ -9,20 +9,13 @@ Lets just create an image map with the known bad pixels
 Arbitrarily going to set to black to good pixel, white for bad pixel
 """
 
-from faxitron.util import hexdump, add_bool_arg, default_date_dir, mkdir_p
-from faxitron import ham
+from faxitron.util import add_bool_arg
 from faxitron import util
-from faxitron.util import width, height, depth
+from faxitron import im_util
 
-import binascii
-import glob
 from PIL import Image, ImageOps
 import numpy as np
 import os
-import sys
-import time
-import usb1
-from scipy.ndimage import median_filter
 import statistics
 import subprocess
 
@@ -32,6 +25,7 @@ except ImportError:
     exposure = None
 
 def make_bpm(im):
+    width, height = im.size
     ret = set()
     for y in range(height):
         for x in range(width):
@@ -41,6 +35,7 @@ def make_bpm(im):
 
 
 def im_med3(im, x, y, badimg):
+    width, height = badimg.size
     pixs = []
     for dx in range(-1, 2, 1):
         xp = x + dx
@@ -75,7 +70,7 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
         fn_oute = fn_out
 
 
-    _imgn, img_in = util.average_dir(dir_in, scalar=scalar)
+    _imgn, img_in = im_util.average_dir(dir_in, scalar=scalar)
 
     desc = dir_in
     print('Processing %s' % desc)
@@ -120,7 +115,7 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
         if invert:
             # IOError("not supported for this image mode")
             # im_wip = ImageOps.invert(im_wip)
-            im_wip = util.im_inv16_slow(im_wip)
+            im_wip = im_util.im_inv16_slow(im_wip)
             print("Invert min: %u, max: %u" % (np.ndarray.min(np.array(im_wip)), np.ndarray.max(np.array(im_wip))))
     print("Save %s" % fn_out)
     im_wip.save(fn_out)
@@ -142,8 +137,8 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
     
             ref_np2 = np.array(ref_im)
             wip_np2 = np.array(im_wip)
-            wip_np2 = util.histeq_np_apply(wip_np2, util.histeq_np_create(ref_np2))
-            im_wip = util.npf2im(wip_np2)
+            wip_np2 = im_util.histeq_np_apply(wip_np2, im_util.histeq_np_create(ref_np2))
+            im_wip = im_util.npf2im(wip_np2)
         elif mode == "convert":
             with util.AutoTempFN(suffix='.png') as tmpa:
                 with util.AutoTempFN(suffix='.png') as tmpb:
@@ -155,14 +150,14 @@ def run(dir_in, fn_out, cal_dir="cal", hist_eq=True, invert=True, hist_eq_roi=No
             im_wip = ImageOps.equalize(im_wip, mask=None)
         elif mode == "2":
             imnp = np.array(im_wip, dtype=np.uint16)
-            im_wip = util.npf2im(exposure.equalize_hist(imnp))
+            im_wip = im_util.npf2im(exposure.equalize_hist(imnp))
         elif mode == "3":
             # raise ValueError("Images of type float must be between -1 and 1.")
             imnp = np.array(im_wip, dtype=np.uint16)
             #imnp = np.ndarray.astype(imnp, dtype=np.float)
             print(np.ndarray.min(imnp), np.ndarray.max(imnp))
             imnp = 1.0 * imnp / 0xFFFF
-            im_wip = util.npf2im(exposure.equalize_adapthist(imnp, clip_limit=0.03))
+            im_wip = im_util.npf2im(exposure.equalize_adapthist(imnp, clip_limit=0.03))
         else:
             raise Exception(mode)
         print("Save %s" % fn_oute)
@@ -186,7 +181,7 @@ def main():
     parser.add_argument('fn_out', default=None, nargs='?', help='')
     args = parser.parse_args()
 
-    run(args.dir_in, args.fn_out, cal_dir=args.cal_dir, hist_eq=args.hist_eq, invert=args.invert, hist_eq_roi=util.parse_roi(args.hist_eq_roi), scalar=args.scalar, rescale=args.rescale, bpr=args.bpr, raw=args.raw)
+    run(args.dir_in, args.fn_out, cal_dir=args.cal_dir, hist_eq=args.hist_eq, invert=args.invert, hist_eq_roi=im_util.parse_roi(args.hist_eq_roi), scalar=args.scalar, rescale=args.rescale, bpr=args.bpr, raw=args.raw)
 
     print("done")
 
