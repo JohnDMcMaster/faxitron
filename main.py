@@ -48,7 +48,7 @@ def main():
     fire_verbose = True
     xr and xr.fire_begin(verbose=fire_verbose)
     try:
-        ham_raw.run(outdir=outdir, postfix=args.postfix, n=args.n, exp=args.exp)
+        ham_raw.run(outdir=outdir, postfix=args.postfix, imgn=args.n, exp=args.exp)
     # notably ^C can cause this
     finally:
         xr and xr.fire_abort(verbose=fire_verbose)

@@ -84,13 +84,14 @@ def npf2im(statef):
     return im
 
 def average_imgs(imgs, scalar=None):
+    width, height = imgs[0].size
     if not scalar:
         scalar = 1.0
     scalar = scalar / len(imgs)
 
-    width, height = imgs[0].size
     statef = np.zeros((height, width), np.float)
     for im in imgs:
+        assert (width, height) == im.size
         statef = statef + scalar * np.array(im, dtype=np.float)
 
     return statef, npf2im(statef)

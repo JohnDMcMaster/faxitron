@@ -9,8 +9,8 @@ import os
 from faxitron import ham
 import glob
 
-def run(outdir, postfix, n, bin_out=False, png_out=True, exp=2000, verbose=False):
-    if outdir is None:
+def run(outdir, postfix, imgn, bin_out=False, png_out=True, exp=2000, verbose=False):
+    if not outdir:
         outdir = default_date_dir("out", "", postfix)
 
     def cap_cb(n, buff):
@@ -35,7 +35,7 @@ def run(outdir, postfix, n, bin_out=False, png_out=True, exp=2000, verbose=False
         print('')
         print('')
 
-    h.cap(cap_cb, n=n)
+    h.cap(cap_cb, n=imgn)
 
 def main():
     import argparse 
@@ -50,7 +50,7 @@ def main():
     parser.add_argument('--postfix', default=None, help='')
     args = parser.parse_args()
 
-    run(args.dir, postfix=args.postfix, n=args.n, bin_out=args.bin, png_out=args.png, exp=args.exp, verbose=args.verbose)
+    run(args.dir, postfix=args.postfix, imgn=args.n, bin_out=args.bin, png_out=args.png, exp=args.exp, verbose=args.verbose)
 
 if __name__ == "__main__":
     main()
