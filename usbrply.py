@@ -7,12 +7,13 @@ import subprocess
 import os
 import sys
 import struct
-
 '''
     (
     "\x08\x84\xA4\x06\x02\x00\x26\x00\x43\x00\xC0\x03\x00\x08\x10\x24"
     "\x00\x00\xC0\x1E\x00\x00\x85\x00")
 '''
+
+
 def str2hex(buff, prefix='', terse=True):
     if len(buff) == 0:
         return 'b""'
@@ -28,9 +29,10 @@ def str2hex(buff, prefix='', terse=True):
                 ret += 'b"'
             if not terse or len(buff) > 16:
                 ret += '%s"' % prefix
-            
-        ret += "\\x%02X" % (buff[i],)
+
+        ret += "\\x%02X" % (buff[i], )
     return ret + '"'
+
 
 def str2hexline(buff):
     if len(buff) == 0:
@@ -38,8 +40,9 @@ def str2hexline(buff):
     buff = bytearray(buff)
     ret = ''
     for i in range(len(buff)):
-        ret += "\\x%02X" % (buff[i],)
+        ret += "\\x%02X" % (buff[i], )
     return '"' + ret + '"'
+
 
 pi = None
 ps = None
@@ -49,25 +52,39 @@ fout = sys.stdout
 prefix = ' ' * 8
 indent = ''
 line_buff = []
+
+
 def lines_clear():
     del line_buff[:]
+
+
 def lines_commit():
     for line in line_buff:
         fout.write(line + '\n')
     del line_buff[:]
+
+
 def line(s):
     line_buff.append('%s%s' % (indent, s))
+
+
 def comment(s):
     line("# " + s)
+
+
 def indentP():
     global indent
     indent += '    '
+
+
 def indentN():
     global indent
     indent = indent[4:]
 
+
 dumb = False
 omit_ro = True
+
 
 def emit_ro():
     '''Return true if keeping ro. Otherwise clear line buffer and return false'''
@@ -77,11 +94,13 @@ def emit_ro():
     else:
         return False
 
+
 def bin2hexarg(data):
     ret = str2hex(data, prefix=prefix)
     if len(data) > 16:
         ret += '\n%s' % prefix
     return ret
+
 
 def pkt_strip(p):
     pprefix = ord(p[0])
@@ -105,12 +124,15 @@ def pkt_strip(p):
         print(size)
         raise Exception("Bad size")
 
+
 class CmpFail(Exception):
     pass
+
 
 def cmp_buff(exp, act):
     if len(exp) != len(act):
         raise CmpFail("Exp: %d, act: %d" % (len(exp), len(act)))
+
 
 def cmp_mask(exp, mask, act):
     if len(exp) != len(act):
@@ -127,21 +149,26 @@ def cmp_mask(exp, mask, act):
             hexdump(act, indent='  ', label='actual')
             raise CmpFail("Exp: 0x%02X, act: 0x%02X" % (ord(exp), ord(actc)))
 
+
 def peekp():
     return nextp()[1]
 
+
 class OutOfPackets(Exception):
     pass
+
 
 def nextp():
     ppi = pi + 1
     while True:
         if ppi >= len(ps):
-            raise OutOfPackets("Out of packets, started packet %d, at %d" % (pi, ppi))
+            raise OutOfPackets("Out of packets, started packet %d, at %d" %
+                               (pi, ppi))
         p = ps[ppi]
         if p['type'] != 'comment':
             return ppi, p
         ppi = ppi + 1
+
 
 def next_bulk1(cmd):
     global pi
@@ -156,33 +183,41 @@ def next_bulk1(cmd):
     assert pr['endp'] == 0x83
     return binascii.unhexlify(pr['data'])
 
+
 def pack32ub(n):
     return struct.pack('>I', n)
+
 
 def pack32ul(n):
     return struct.pack('<I', n)
 
+
 def pack16ub(n):
     return struct.pack('>H', n)
+
 
 def pack16ul(n):
     return struct.pack('<H', n)
 
+
 def unpack32ub(buff):
     return struct.unpack('>I', buff)[0]
+
 
 def unpack32ul(buff):
     return struct.unpack('<I', buff)[0]
 
+
 def unpack16ub(buff):
     return struct.unpack('>H', buff)[0]
+
 
 def unpack16ul(buff):
     return struct.unpack('<H', buff)[0]
 
+
 def bulk_write(pw):
     global pi
-
     '''
     Convert
     # Generated from packet 209/210
@@ -194,7 +229,6 @@ def bulk_write(pw):
     To use library function bulk1
     validate_read("\x01", bulk1(dev, "\x00\x00\x00\x00\x00\x00\x00\x00"), "packet 211/212")
     '''
-
     def basic_write():
         cmd = binascii.unhexlify(pw['data'])
         line('bulkWrite(0x%02X, %s)' % (pw['endp'], bin2hexarg(cmd)))
@@ -223,7 +257,6 @@ def bulk_write(pw):
     pi = pi_next
 
     prdata = binascii.unhexlify(pr['data'])
-
 
     # opcode 0 is known, but its boring
     if opcode == 1:
@@ -273,13 +306,14 @@ def bulk_write(pw):
         pktl, pkth = pw['packn']
         assert_msg = '"packet %s/%s"' % (pktl, pkth)
         response = bin2hexarg(prdata)
-    
+
         # line('validate_read(%s, bulk1(dev, %s), %s)' % (response, out, desc))
         payload_arg = ""
         if len(payload):
             out = bin2hexarg(payload)
             payload_arg = ", payload=%s" % out
-        line("validate_cmd1(dev, 0x%02X, %s, msg=%s%s)" % (opcode, response, assert_msg, payload_arg))
+        line("validate_cmd1(dev, 0x%02X, %s, msg=%s%s)" %
+             (opcode, response, assert_msg, payload_arg))
 
 
 def dump(fin, source_str, save=False):
@@ -305,7 +339,7 @@ def dump(fin, source_str, save=False):
             raise Exception()
         if length and length != p['len']:
             raise Exception()
-            
+
         return pi + 1
 
     im_bytes = None
@@ -340,7 +374,9 @@ def dump(fin, source_str, save=False):
                 im_bytes = len(buff)
             else:
                 im_bytes += len(buff)
-            comment("bulkRead(0x%02X): req %u, got %u bytes w/ sync %s, %s bytes total" % (endpoint, p['len'], len(buff), sync_str, im_bytes))
+            comment(
+                "bulkRead(0x%02X): req %u, got %u bytes w/ sync %s, %s bytes total"
+                % (endpoint, p['len'], len(buff), sync_str, im_bytes))
         else:
             raise Exception("%u unknown type: %s" % (pi, p['type']))
         if not is_comment:
@@ -351,12 +387,16 @@ def dump(fin, source_str, save=False):
     indentN()
     lines_commit()
 
+
 if __name__ == "__main__":
-    import argparse 
-    
+    import argparse
+
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--dumb', action='store_true')
-    add_bool_arg(parser, '--omit-ro', default=True, help='Omit read only requests (ex: get SM info)')
+    add_bool_arg(parser,
+                 '--omit-ro',
+                 default=True,
+                 help='Omit read only requests (ex: get SM info)')
     parser.add_argument('--big-thresh', type=int, default=255)
     parser.add_argument('--usbrply', default='')
     parser.add_argument('-w', action='store_true', help='Write python file')
@@ -364,9 +404,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     source_str = args.fin
-    if args.fin.find('.cap') >= 0 or args.fin.find('.pcapng') >= 0 or args.fin.find('.pcap') >= 0:
+    if args.fin.find('.cap') >= 0 or args.fin.find(
+            '.pcapng') >= 0 or args.fin.find('.pcap') >= 0:
         fin = '/tmp/scrape.json'
-        cmd = 'usbrply --no-packet-numbers --no-setup --device-hi %s -j %s >%s' % (args.usbrply, args.fin, fin)
+        cmd = 'usbrply --no-packet-numbers --no-setup --device-hi %s -j %s >%s' % (
+            args.usbrply, args.fin, fin)
         try:
             subprocess.check_call(cmd, shell=True)
         except:
@@ -382,6 +424,6 @@ if __name__ == "__main__":
         assert fnout != fin, fin
         fout = open(fnout, 'w')
 
-    dumb=args.dumb
-    omit_ro=args.omit_ro
+    dumb = args.dumb
+    omit_ro = args.omit_ro
     dump(fin, source_str)

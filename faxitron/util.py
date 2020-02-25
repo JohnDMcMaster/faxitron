@@ -7,11 +7,20 @@ import tempfile
 import errno
 import json
 
+
 def add_bool_arg(parser, yes_arg, default=False, **kwargs):
     dashed = yes_arg.replace('--', '')
     dest = dashed.replace('-', '_')
-    parser.add_argument(yes_arg, dest=dest, action='store_true', default=default, **kwargs)
-    parser.add_argument('--no-' + dashed, dest=dest, action='store_false', **kwargs)
+    parser.add_argument(yes_arg,
+                        dest=dest,
+                        action='store_true',
+                        default=default,
+                        **kwargs)
+    parser.add_argument('--no-' + dashed,
+                        dest=dest,
+                        action='store_false',
+                        **kwargs)
+
 
 def hexdump(data, label=None, indent='', address_width=8, f=sys.stdout):
     def isprint(c):
@@ -19,20 +28,20 @@ def hexdump(data, label=None, indent='', address_width=8, f=sys.stdout):
 
     if label:
         print(label)
-    
+
     bytes_per_half_row = 8
     bytes_per_row = 16
     datab = tobytes(data)
     datas = tostr(data)
     data_len = len(data)
-    
+
     def hexdump_half_row(start):
         left = max(data_len - start, 0)
-        
+
         real_data = min(bytes_per_half_row, left)
 
-        f.write(''.join('%02X ' % c for c in datab[start:start+real_data]))
-        f.write(''.join('   '*(bytes_per_half_row-real_data)))
+        f.write(''.join('%02X ' % c for c in datab[start:start + real_data]))
+        f.write(''.join('   ' * (bytes_per_half_row - real_data)))
         f.write(' ')
 
         return start + bytes_per_half_row
@@ -50,8 +59,12 @@ def hexdump(data, label=None, indent='', address_width=8, f=sys.stdout):
         left = data_len - row_start
         real_data = min(bytes_per_row, left)
 
-        f.write(''.join([c if isprint(c) else '.' for c in str(datas[row_start:row_start+real_data])]))
+        f.write(''.join([
+            c if isprint(c) else '.'
+            for c in str(datas[row_start:row_start + real_data])
+        ]))
         f.write((" " * (bytes_per_row - real_data)) + "|\n")
+
 
 def default_date_dir(root, prefix, postfix):
     datestr = datetime.datetime.now().isoformat()[0:10]
@@ -71,6 +84,7 @@ def default_date_dir(root, prefix, postfix):
                 return fn
         n += 1
 
+
 def mkdir_p(path):
     try:
         os.makedirs(path)
@@ -79,6 +93,7 @@ def mkdir_p(path):
             pass
         else:
             raise
+
 
 def tobytes(buff):
     if type(buff) is str:
@@ -89,6 +104,7 @@ def tobytes(buff):
     else:
         assert 0, type(buff)
 
+
 def tostr(buff):
     if type(buff) is str:
         return buff
@@ -96,6 +112,7 @@ def tostr(buff):
         return ''.join([chr(b) for b in buff])
     else:
         assert 0, type(buff)
+
 
 # Log file descriptor to file
 class IOLog(object):
@@ -150,6 +167,7 @@ class IOLog(object):
         self.fd.write(data)
         self.out_fd.write(data)
 
+
 class AutoTempFN:
     def __init__(self, suffix=''):
         #self.name = tempfile.mkstemp()
@@ -166,5 +184,7 @@ class AutoTempFN:
         except:
             pass
 
+
 def json_write(fn, j):
-    open(fn, 'w').write(json.dumps(j, sort_keys=True, indent=4, separators=(',', ': ')))
+    open(fn, 'w').write(
+        json.dumps(j, sort_keys=True, indent=4, separators=(',', ': ')))

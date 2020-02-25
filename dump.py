@@ -7,15 +7,19 @@ from faxitron import xray
 import os
 import json
 
+
 def main():
-    import argparse 
-    
+    import argparse
+
     parser = argparse.ArgumentParser(description='Dump diagnostic info')
     parser.add_argument('--verbose', action="store_true")
     parser.add_argument('--dir', default=None, help='Output dir')
     parser.add_argument('--postfix', default=None, help='')
     parser.add_argument('--port', default=xray.default_port())
-    util.add_bool_arg(parser, '--ham', default=True, help='Include sensor output')
+    util.add_bool_arg(parser,
+                      '--ham',
+                      default=True,
+                      help='Include sensor output')
     args = parser.parse_args()
 
     outdir = args.dir
@@ -58,6 +62,7 @@ def main():
         fn = os.path.join(outdir, "xray.json")
         print("Writing %s" % fn)
         util.json_write(fn, j)
+
 
 if __name__ == "__main__":
     main()

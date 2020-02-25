@@ -10,25 +10,31 @@ Wonder where those came from?
 from faxitron import util
 import serial
 import time
-import os 
+import os
+
 
 class Timeout(Exception):
     pass
 
+
 class DoorOpen(Exception):
     pass
+
 
 class WarmingUp(Exception):
     pass
 
+
 def default_port():
     return "/dev/ttyUSB0"
+
 
 # TODO: look into MX-20
 class XRay:
     def __init__(self, port="/dev/ttyUSB0", ser_timeout=0.1, verbose=False):
         self.verbose = verbose
-        self.serial = serial.Serial(port,
+        self.serial = serial.Serial(
+            port,
             baudrate=9600,
             bytesize=serial.EIGHTBITS,
             parity=serial.PARITY_NONE,
@@ -78,9 +84,9 @@ class XRay:
             ret += c
         else:
             raise Timeout('Timed out waiting for closing ~')
-        
+
         if self.verbose:
-            print('XRAY DEBUG: recv: returning: "%s"' % (ret,))
+            print('XRAY DEBUG: recv: returning: "%s"' % (ret, ))
         return ret
 
     def recv_c(self, timeout=1.0):
@@ -93,9 +99,9 @@ class XRay:
                 continue
             else:
                 c = c.decode("ascii")
-                self.verbose and print('XRAY DEBUG: recv: returning: %s %02X' % (c, ord(c)))
+                self.verbose and print('XRAY DEBUG: recv: returning: %s %02X' %
+                                       (c, ord(c)))
                 return c
-        
 
     def send(self, out, recv=False):
         """
@@ -104,9 +110,10 @@ class XRay:
         """
 
         if self.verbose:
-            print('XRAY DEBUG: sending: %s' % (out,))
+            print('XRAY DEBUG: sending: %s' % (out, ))
             if self.serial.inWaiting():
-                raise Exception('At send %d chars waiting' % self.serial.inWaiting())
+                raise Exception('At send %d chars waiting' %
+                                self.serial.inWaiting())
         # \n seems to have no effect
         self.serial.write((out + '\r').encode('ascii'))
         self.serial.flush()
@@ -228,7 +235,7 @@ class XRay:
         ret = self.send("?T", recv=True)
         ret = int(ret, 10)
         # FIXME: range?
-        assert 1 <= ret <=  9999
+        assert 1 <= ret <= 9999
         return ret
 
     def get_time(self):
@@ -244,7 +251,7 @@ class XRay:
 
         NOTE: beep
         """
-        assert 1 <= dsec <=  9999
+        assert 1 <= dsec <= 9999
         self.send("!T%04u" % dsec)
         assert dsec == self.get_timed()
 
@@ -278,13 +285,14 @@ class XRay:
 
         try:
             # If the door is open, no response is given
-            verbose and print("fire: starting, %0.1f s @ %s kVp" % (fire_time, kvp))
+            verbose and print("fire: starting, %0.1f s @ %s kVp" %
+                              (fire_time, kvp))
             # Start x-ray sequence
             self.send("!B")
             # Wait for X to acknowledge firing (no newline)
             c = self.recv_c()
             assert c == "X", "Got '%s'" % c
-    
+
             verbose and print("fire: confirming")
             # Confirm x-ray
             self.send("C")

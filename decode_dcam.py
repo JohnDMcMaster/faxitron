@@ -9,8 +9,10 @@ import struct
 
 MAGIC = "DCAMIMG"
 
+
 class BadMagic(Exception):
     pass
+
 
 # This sort of works, but gives an 8 bit image
 # Can I get it to work with mode I somehow instead?
@@ -22,6 +24,7 @@ def decode_l8(buff):
     img = Image.frombytes('L', (width, height), buff, "raw", "L;16", 0, -1)
     #img =  PIL.ImageOps.invert(img)
     return img
+
 
 def decode(buff):
     '''Given bin return PIL image object'''
@@ -35,11 +38,14 @@ def decode(buff):
     for y in range(height):
         line0 = buff[y * width * depth:(y + 1) * width * depth]
         for x in range(width):
-            b0 = line0[2*x + 0]
-            b1 = line0[2*x + 1]
+            b0 = line0[2 * x + 0]
+            b1 = line0[2 * x + 1]
             img.putpixel((x, y), (b1 << 8) + b0)
     return img
+
+
 #decode = decode_l8
+
 
 def process_bin(fin, fout):
     print('Reading %s...' % fin)
@@ -61,6 +67,7 @@ def process_bin(fin, fout):
     magic = header[0:len(MAGIC)]
     if MAGIC != magic:
         raise BadMagic()
+
     def u32(off):
         return struct.unpack("<I", header[off:off + 4])[0]
 
@@ -98,17 +105,20 @@ def process_bin(fin, fout):
 
     # rest 0 / not sure
 
-
     buff = buff[256:]
     print('Decoding image...')
     img = decode(buff)
     print('Saving %s...' % fout)
     img.save(fout)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Decode a .bin to a .png')
     parser.add_argument('fin', help='.bin file name in')
-    parser.add_argument('fout', default=None, nargs='?', help='.png file name out')
+    parser.add_argument('fout',
+                        default=None,
+                        nargs='?',
+                        help='.png file name out')
     args = parser.parse_args()
 
     if os.path.isdir(args.fin):
@@ -120,7 +130,8 @@ if __name__ == "__main__":
         if not os.path.exists(dout):
             os.mkdir(dout)
         for fn in glob.glob(os.path.join(args.fin, '*.img')):
-            fout = os.path.join(dout, os.path.basename(fn).replace('.img', '.png'))
+            fout = os.path.join(dout,
+                                os.path.basename(fn).replace('.img', '.png'))
             process_bin(fn, fout)
     else:
         fout = args.fout

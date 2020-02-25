@@ -5,10 +5,12 @@ import os
 import json
 import statistics
 
+
 def parse_roi(s):
     if s is None:
         return None
     return [int(x) for x in s.split(',')]
+
 
 def histeq_im(im, nbr_bins=256):
     imnp2 = np.array(im)
@@ -23,7 +25,7 @@ def histeq_np(npim, nbr_bins=256):
     That is, return 2D if given 2D, or 1D if 1D
     '''
     return histeq_np_apply(npim, histeq_np_create(npim, nbr_bins=nbr_bins))
-    
+
 
 def histeq_np_create(npim, nbr_bins=256, verbose=0):
     '''
@@ -37,11 +39,12 @@ def histeq_np_create(npim, nbr_bins=256, verbose=0):
     imhist, bins = np.histogram(flat, nbr_bins, normed=True)
     verbose and print('imhist', imhist)
     verbose and print('imhist', bins)
-    cdf = imhist.cumsum() #cumulative distribution function
+    cdf = imhist.cumsum()  #cumulative distribution function
     verbose and print('cdfraw', cdf)
-    cdf = 0xFFFF * cdf / cdf[-1] #normalize
+    cdf = 0xFFFF * cdf / cdf[-1]  #normalize
     verbose and print('cdfnorm', cdf)
     return cdf, bins
+
 
 def histeq_np_apply(npim, create):
     cdf, bins = create
@@ -60,6 +63,7 @@ def im_inv16_slow(im):
         im32_1d[i] = 0xFFFF - p
     ret = Image.fromarray(im32_1d.reshape(im32_2d.shape))
     return ret
+
 
 def npf2im(statef):
     #return statef, None
@@ -84,6 +88,7 @@ def npf2im(statef):
 
     return im
 
+
 def average_imgs(imgs, scalar=None):
     width, height = imgs[0].size
     if not scalar:
@@ -97,6 +102,7 @@ def average_imgs(imgs, scalar=None):
 
     return statef, npf2im(statef)
 
+
 def average_dir(din, images=0, verbose=1, scalar=None):
     imgs = []
 
@@ -109,6 +115,7 @@ def average_dir(din, images=0, verbose=1, scalar=None):
             verbose and print("WARNING: only using first %u images" % images)
             break
     return average_imgs(imgs, scalar=scalar)
+
 
 def default_cal_dir(j=None, im_dir=None):
     if im_dir:
@@ -126,6 +133,7 @@ def default_cal_dir(j=None, im_dir=None):
     d = "%s_%s" % (j["model"], j["sn"])
     d = d.lower()
     return os.path.join("cal", d)
+
 
 def make_bpm(im):
     width, height = im.size
@@ -185,6 +193,7 @@ def dir2np(din, cal_dir=None, bpr=False):
         m += 1
     return ret
 
+
 def average_npimgs(npims):
     """
     width = len(npims[0])
@@ -198,4 +207,3 @@ def average_npimgs(npims):
     """
     #return np.sum(npims, axis=0) / len(npims)
     return np.average(npims, axis=0)
-
