@@ -3,6 +3,7 @@ from PIL import Image
 import glob
 import os
 import json
+import statistics
 
 def parse_roi(s):
     if s is None:
@@ -125,3 +126,76 @@ def default_cal_dir(j=None, im_dir=None):
     d = "%s_%s" % (j["model"], j["sn"])
     d = d.lower()
     return os.path.join("cal", d)
+
+def make_bpm(im):
+    width, height = im.size
+    ret = set()
+    for y in range(height):
+        for x in range(width):
+            if im.getpixel((x, y)):
+                ret.add((x, y))
+    return ret
+
+
+def im_med3(im, x, y, badimg):
+    width, height = badimg.size
+    pixs = []
+    for dx in range(-1, 2, 1):
+        xp = x + dx
+        if xp < 0 or xp >= width:
+            continue
+        for dy in range(-1, 2, 1):
+            yp = y + dy
+            if yp < 0 or yp >= height:
+                continue
+            if not badimg.getpixel((xp, yp)):
+                pixs.append(im.getpixel((xp, yp)))
+    return int(statistics.median(pixs))
+
+
+def do_bpr(im, badimg):
+    ret = im.copy()
+    bad_pixels = make_bpm(badimg)
+    for x, y in bad_pixels:
+        ret.putpixel((x, y), im_med3(im, x, y, badimg))
+    return ret
+
+
+def dir2np(din, cal_dir=None, bpr=False):
+    ret = []
+
+    badimg = None
+    if bpr and cal_dir:
+        badimg = Image.open(os.path.join(cal_dir, 'bad.png'))
+        print("Loaded bad pixel map")
+
+    m = 0
+    while True:
+        burst = []
+        for fn in list(glob.glob(os.path.join(din, "cap_%02u_*.png" % m))):
+            im = Image.open(fn)
+            if badimg:
+                im = do_bpr(im, badimg)
+
+            npim = np.array(im, dtype=np.float)
+            burst.append(np.ndarray.flatten(npim))
+        if not burst:
+            break
+        ret.append(burst)
+        m += 1
+    return ret
+
+def average_npimgs(npims):
+    """
+    width = len(npims[0])
+    height = len(npims)
+
+    statef = np.zeros((height, width), np.float)
+    for npim in npims:
+        statef = statef + npim 
+
+    return statef / len(npims)
+    """
+    #return np.sum(npims, axis=0) / len(npims)
+    return np.average(npims, axis=0)
+

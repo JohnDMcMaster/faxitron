@@ -17,7 +17,6 @@ from faxitron import ham
 from PIL import Image, ImageOps
 import numpy as np
 import os
-import statistics
 import subprocess
 import json
 
@@ -25,39 +24,6 @@ try:
     from skimage import exposure
 except ImportError:
     exposure = None
-
-def make_bpm(im):
-    width, height = im.size
-    ret = set()
-    for y in range(height):
-        for x in range(width):
-            if im.getpixel((x, y)):
-                ret.add((x, y))
-    return ret
-
-
-def im_med3(im, x, y, badimg):
-    width, height = badimg.size
-    pixs = []
-    for dx in range(-1, 2, 1):
-        xp = x + dx
-        if xp < 0 or xp >= width:
-            continue
-        for dy in range(-1, 2, 1):
-            yp = y + dy
-            if yp < 0 or yp >= height:
-                continue
-            if not badimg.getpixel((xp, yp)):
-                pixs.append(im.getpixel((xp, yp)))
-    return int(statistics.median(pixs))
-
-
-def do_bpr(im, badimg):
-    ret = im.copy()
-    bad_pixels = make_bpm(badimg)
-    for x, y in bad_pixels:
-        ret.putpixel((x, y), im_med3(im, x, y, badimg))
-    return ret
 
 def run(dir_in, fn_out, cal_dir=None, hist_eq=True, invert=True, hist_eq_roi=None, scalar=None, rescale=True, bpr=True, raw=False):
     if not fn_out:
@@ -119,7 +85,7 @@ def run(dir_in, fn_out, cal_dir=None, hist_eq=True, invert=True, hist_eq_roi=Non
         # Seems this needs to be done after scaling or artifacts get amplified
         if bpr and cal_dir:
             badimg = Image.open(os.path.join(cal_dir, 'bad.png'))
-            im_wip = do_bpr(im_wip, badimg)
+            im_wip = im_util.do_bpr(im_wip, badimg)
             print("BPR min: %u, max: %u" % (np.ndarray.min(np.array(im_wip)), np.ndarray.max(np.array(im_wip))))
 
         if invert:
