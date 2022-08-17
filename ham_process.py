@@ -18,6 +18,7 @@ import numpy as np
 import os
 import subprocess
 import json
+import shutil
 
 try:
     from skimage import exposure
@@ -119,6 +120,7 @@ def run(dir_in,
         print("Eq mode (FAXITRON_EQ_MODE) %s" % mode)
         if mode == "0":
             if hist_eq_roi:
+                print("Using ROI %s" % (hist_eq_roi, ))
                 x1, y1, x2, y2 = hist_eq_roi
                 ref_im = im_wip.crop((x1, y1, x2, y2))
             else:
@@ -159,17 +161,27 @@ def run(dir_in,
         print("Eq min: %u, max: %u" % (np.ndarray.min(
             np.array(im_wip)), np.ndarray.max(np.array(im_wip))))
 
+    # In practice I want to bind cal files to the images
+    # Cache it here to make sure they stay together
+    if cal_dir:
+        cal_backup = os.path.join(dir_in, "cal")
+        if not os.path.exists(cal_backup):
+            shutil.copytree(cal_dir, cal_backup)
+
 
 def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Apply image correction')
     #parser.add_argument('--images', type=int, default=0, help='Only take first n images, for debugging')
-    parser.add_argument('--cal-dir', default='cal', help='')
+    parser.add_argument('--cal-dir', default=None, help='')
     parser.add_argument('--hist-eq-roi',
                         default=None,
                         help='hist eq x1,y1,x2,y2')
-    add_bool_arg(parser, "--hist-eq", default=True)
+    add_bool_arg(parser,
+                 "--hist-eq",
+                 default=True,
+                 help="FAXITRON_EQ_MODE one of 0 (default) or convert")
     add_bool_arg(parser, "--invert", default=True)
     add_bool_arg(parser, "--rescale", default=True)
     add_bool_arg(parser, "--bpr", default=True)
