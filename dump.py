@@ -46,7 +46,7 @@ def main():
         print("S/N: %s" % sn)
         fn = os.path.join(outdir, "ham_info.bin")
         print("Writing %s" % fn)
-        open(fn, "w").write(info)
+        open(fn, "wb").write(info)
 
     if args.port:
         print("")
