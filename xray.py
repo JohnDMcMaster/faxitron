@@ -9,7 +9,7 @@ def run():
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Decode a .bin to a .png')
+    parser = argparse.ArgumentParser(description='Control Faxitron xray unit')
     parser.add_argument('--verbose', action="store_true")
     parser.add_argument('--info', action="store_true")
     parser.add_argument('--timed', default=None, type=int)
