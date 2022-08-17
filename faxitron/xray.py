@@ -33,6 +33,7 @@ def default_port():
 class XRay:
     def __init__(self, port="/dev/ttyUSB0", ser_timeout=0.1, verbose=False):
         self.verbose = verbose
+        self.verbose and print("opening", port)
         self.serial = serial.Serial(
             port,
             baudrate=9600,
@@ -76,6 +77,9 @@ class XRay:
             if not c:
                 if timeout is not None and time.time() - tstart >= timeout:
                     raise Timeout('Timed out')
+                continue
+            if c == b'\xFF':
+                print("WARNING: bad response 0xFF")
                 continue
             c = c.decode("ascii")
             self.verbose and print("%s %02X" % (c, ord(c)))
@@ -133,7 +137,7 @@ class XRay:
         """
         ret = self.send("?D", recv=True)
         # FIXME: MX-20 support
-        assert ret == "DX-50"
+        assert ret in ("DX-50", "MX-20")
         return ret
 
     def get_revision(self):
@@ -146,6 +150,7 @@ class XRay:
         """
         vers = self.send("?R", recv=True)
         # Verify its a valid version
+        # ? why was this commented out
         float(vers)
         # But return as string to avoid precision issues
         return vers
