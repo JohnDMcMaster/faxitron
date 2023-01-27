@@ -149,7 +149,7 @@ def run(dir_in,
         elif mode == "3":
             # raise ValueError("Images of type float must be between -1 and 1.")
             imnp = np.array(im_wip, dtype=np.uint16)
-            #imnp = np.ndarray.astype(imnp, dtype=np.float)
+            #imnp = np.ndarray.astype(imnp, dtype=float)
             print(np.ndarray.min(imnp), np.ndarray.max(imnp))
             imnp = 1.0 * imnp / 0xFFFF
             im_wip = im_util.npf2im(

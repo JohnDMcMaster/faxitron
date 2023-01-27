@@ -36,7 +36,7 @@ def histeq_np_create(npim, nbr_bins=256, verbose=0):
     # get image histogram
     flat = npim.flatten()
     verbose and print('flat', flat)
-    imhist, bins = np.histogram(flat, nbr_bins, normed=True)
+    imhist, bins = np.histogram(flat, nbr_bins)
     verbose and print('imhist', imhist)
     verbose and print('imhist', bins)
     cdf = imhist.cumsum()  #cumulative distribution function
@@ -95,10 +95,10 @@ def average_imgs(imgs, scalar=None):
         scalar = 1.0
     scalar = scalar / len(imgs)
 
-    statef = np.zeros((height, width), np.float)
+    statef = np.zeros((height, width), float)
     for im in imgs:
         assert (width, height) == im.size
-        statef = statef + scalar * np.array(im, dtype=np.float)
+        statef = statef + scalar * np.array(im, dtype=float)
 
     return statef, npf2im(statef)
 
@@ -185,7 +185,7 @@ def dir2np(din, cal_dir=None, bpr=False):
             if badimg:
                 im = do_bpr(im, badimg)
 
-            npim = np.array(im, dtype=np.float)
+            npim = np.array(im, dtype=float)
             burst.append(np.ndarray.flatten(npim))
         if not burst:
             break
@@ -199,7 +199,7 @@ def average_npimgs(npims):
     width = len(npims[0])
     height = len(npims)
 
-    statef = np.zeros((height, width), np.float)
+    statef = np.zeros((height, width), float)
     for npim in npims:
         statef = statef + npim 
 
