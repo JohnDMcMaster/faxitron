@@ -680,7 +680,8 @@ def decode(buff, width, height, depth=2):
             b0 = line0[2 * x + 0]
             b1 = line0[2 * x + 1]
             img.putpixel((x, y), (b1 << 8) + b0)
-    return img
+    # 2023-06-24: rotate to more accurately reflect being in front of DX-50
+    return img.rotate(180)
 
 
 def trig_n(dev, n):
