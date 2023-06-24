@@ -181,7 +181,7 @@ def main():
     add_bool_arg(parser,
                  "--hist-eq",
                  default=True,
-                 help="FAXITRON_EQ_MODE one of 0 (default) or convert")
+                 help="FAXITRON_EQ_MODE=convert (default, FAXITRON_EQ_MODE=0 uses --hist-eq-roi, ")
     add_bool_arg(parser, "--invert", default=True)
     add_bool_arg(parser, "--rescale", default=True)
     add_bool_arg(parser, "--bpr", default=True)
