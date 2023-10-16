@@ -26,7 +26,7 @@ def run(outdir,
 
         if bin_out:
             print("Saving %s" % binfn)
-            open(binfn, 'w').write(buff)
+            open(binfn, 'wb').write(buff)
         if png_out:
             print("Saving %s" % pngfn)
             h.decode(buff).save(pngfn)
