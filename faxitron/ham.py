@@ -14,7 +14,10 @@ import sys
 HAM_VID = 0x0661
 # C9730DK-11
 DC5_PID = 0xA802
+# C9732DK
 DC12_PID = 0xA800
+# C9732DT, functionally identical to C9732DK but different ID
+DC12T_PID = 0x4500
 
 # TODO: consider upshifting to make raw easier to see
 PIX_MAX = 0x3FFF
@@ -733,7 +736,7 @@ def open_dev(usbcontext=None, verbose=False):
     for udev in usbcontext.getDeviceList(skip_on_error=True):
         vid = udev.getVendorID()
         pid = udev.getProductID()
-        if (vid, pid) in ((HAM_VID, DC5_PID), (HAM_VID, DC12_PID)):
+        if (vid, pid) in ((HAM_VID, DC5_PID), (HAM_VID, DC12_PID), (HAM_VID, DC12T_PID)):
             if verbose:
                 print('')
                 print('')
