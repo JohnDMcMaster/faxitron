@@ -197,18 +197,16 @@ class XRay:
         got = self.get_mode()
         assert got == "R", got
 
-    '''
-    def mode_panel(self):
+     def mode_panel(self):
         """
         Set mode to front panel
         """
-        assert 0, "FIXME: doesn't seem to work"
+        # assert 0, "FIXME: doesn't seem to work"
         self.send("!MF")
         # time.sleep(2.0)
         # No feedback, so query to verify set
         got = self.get_mode()
         assert got == "F", got
-    '''
 
     def set_kvp(self, n):
         """
@@ -283,10 +281,14 @@ class XRay:
         kvp = self.get_kvp()
         if timeout is None:
             timeout = fire_time + 1.0
+
         verbose = verbose or self.verbose
 
         # Sanity check the door to avoid timeout below if possible
         self.assert_ready()
+
+        # enable remote control when issued thru main.py
+        self.mode_remote()
 
         try:
             # If the door is open, no response is given
@@ -305,8 +307,7 @@ class XRay:
             assert c == "P"
         # notably ^C can cause this
         except:
-            verbose and print("fire: aborting")
-            self.send("A")
+            self.fire_abort(verbose=True)
 
     def fire(self, timeout=None, verbose=False):
         self.fire_begin(timeout=timeout, verbose=verbose)
@@ -319,10 +320,9 @@ class XRay:
 
             # Sanity check the door in case it was opened to interrupt the x-ray
             self.assert_ready()
-        # notably ^C can cause this
+            # notably ^C can cause this
         except:
-            verbose and print("fire: aborting")
-            self.send("A")
+            self.fire_abort(verbose=True)
 
         verbose and print("fire: done")
 
